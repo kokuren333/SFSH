@@ -9,7 +9,7 @@
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { PlotNode, PublicWork, QuizItem, TextBlock } from "../../../site/src/public-types.ts";
+import type { PlotNode, PublicWork, QuizItem, SynopsisPage, TextBlock } from "../../../site/src/public-types.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
 import { readJson, writeJson } from "../nkg/io.ts";
 import type { Nkg } from "../nkg/types.ts";
@@ -104,6 +104,16 @@ export function authorshipCheck(nkg: Nkg | null, pages: (PageFile | null)[], tag
   };
 }
 
+/** AMENDMENT 11: gen/pages/synopsis.json (blocks + chapter order) → the public synopsis, or null when absent / empty. */
+export function synopsisOf(file: PageFile | null | undefined, cite: Set<string>): SynopsisPage | null {
+  if (!file || !Array.isArray(file.blocks) || !file.blocks.length) return null;
+  const byId = new Map(file.blocks.map((b) => [b.id, b] as const));
+  const pick = (idList: string[] | undefined) => (idList ?? []).map((id) => byId.get(id)).filter((b): b is NonNullable<typeof b> => !!b).map((b) => displayBlock(b, cite));
+  const chapters = (file.chapters ?? []).map((c) => ({ id: c.id, heading: c.heading, blocks: pick(c.block_ids) })).filter((c) => c.blocks.length);
+  if (!chapters.length) return null;
+  return { intro: pick(file.intro_ids), chapters };
+}
+
 /** Pure part of compose: projection + page files (+ tags / timestamps) → PublicWork. */
 export function composePublicWork(
   projection: PublicWork,
@@ -115,6 +125,8 @@ export function composePublicWork(
   const figureNote = (slot: "relations" | "reverse_plot" | "matrix", present: boolean) => (present ? (blocks("figure_notes", slot)[0] ?? null) : null);
   const quizPage = pages.quiz;
   const quiz = (quizPage ? (quizPage.items ?? []) : projection.pages.quiz).map((q) => displayQuiz(q, cite));
+
+  const synopsis = synopsisOf(pages.synopsis, cite);
 
   const pw: PublicWork = {
     schema: "sfsh-public/1",
@@ -132,6 +144,7 @@ export function composePublicWork(
       context: { intro: blocks("context", "intro"), items: projection.pages.context.items, iconic: projection.pages.context.iconic },
       interpretations: { intro: blocks("interpretations", "intro"), items: projection.pages.interpretations.items },
       quiz,
+      ...(synopsis ? { synopsis } : {}),
     },
     elements: projection.elements,
     gaps: projection.gaps,
@@ -144,6 +157,7 @@ export function composePublicWork(
     ...pw.pages.context.intro,
     ...pw.pages.interpretations.intro,
     ...pw.pages.quiz,
+    ...(synopsis ? [...synopsis.intro, ...synopsis.chapters.flatMap((c) => c.blocks)] : []),
   ].map((b) => b.spoiler);
   pw.work.spoiler_max = maxSpoiler(projection.work.spoiler_max, ...textSpoilers);
   if (opts.tags) pw.work.tags = opts.tags;
@@ -156,7 +170,7 @@ export async function composePublic(ctx: StageContext): Promise<StageResult> {
   const projection = readJson<PublicWork | null>(ctx.workDir, GEN_FILES.projection, null);
   if (!projection) throw new Error(`S3 compose: ${GEN_FILES.projection} missing — run projectPublic first`);
   const pages: Partial<Record<PageKey, PageFile | null>> = {};
-  for (const p of ["overview", "figure_notes", "themes", "context", "interpretations", "quiz"] as const) pages[p] = readJson<PageFile | null>(ctx.workDir, GEN_FILES.page(p), null);
+  for (const p of ["overview", "figure_notes", "themes", "context", "interpretations", "quiz", "synopsis"] as const) pages[p] = readJson<PageFile | null>(ctx.workDir, GEN_FILES.page(p), null);
   const warnings: string[] = [];
   if (!pages.overview) warnings.push("compose: gen/pages missing — public.json has no page text (run writePages)");
 
@@ -198,6 +212,8 @@ export async function composePublic(ctx: StageContext): Promise<StageResult> {
     figure_notes: [pw.pages.figure_notes.relations, pw.pages.figure_notes.reverse_plot, pw.pages.figure_notes.matrix].filter(Boolean).length,
     intros: pw.pages.themes.intro.length + pw.pages.context.intro.length + pw.pages.interpretations.intro.length,
     quiz: pw.pages.quiz.length,
+    synopsis_chapters: pw.pages.synopsis?.chapters.length ?? 0,
+    synopsis_blocks: pw.pages.synopsis ? pw.pages.synopsis.intro.length + pw.pages.synopsis.chapters.reduce((n, c) => n + c.blocks.length, 0) : 0,
   };
   const check = {
     generated_at: now,
@@ -248,6 +264,8 @@ export async function composePublic(ctx: StageContext): Promise<StageResult> {
       figure_notes: blocksCount.figure_notes,
       intro_blocks: blocksCount.intros,
       quiz: blocksCount.quiz,
+      synopsis_chapters: blocksCount.synopsis_chapters,
+      synopsis_blocks: blocksCount.synopsis_blocks,
       sources: pw.sources.length,
       authorship_violations: auth.violations_total,
       spoiler_max: pw.work.spoiler_max,

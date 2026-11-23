@@ -16,7 +16,7 @@ import { hierarchy, tree } from "d3-hierarchy";
 import type { PlotNode, VizReversePlot } from "../public-types.ts";
 import type { DesignTokens } from "../design/tokens-types.ts";
 import { type Raw, esc, raw } from "../html.ts";
-import { type FigureContext, FACTOR_LABEL, LEVEL_LABEL, epHtml, fmt, truncateToWidth, widthClasses, wrap } from "./common.ts";
+import { type FigureContext, FACTOR_LABEL, LEVEL_LABEL, altFold, epHtml, fmt, stackTables, truncateToWidth, widthClasses, wrap } from "./common.ts";
 
 /** Depth drawn in the SVG tree and expanded by default in the list (0 = outcome). */
 export const DEFAULT_DEPTH = 2;
@@ -237,7 +237,7 @@ function altTable(t: DesignTokens, root: PlotNode, idx: number): string {
     n.children.forEach((c) => walk(c, n, depth + 1));
   };
   walk(root, null, 0);
-  return `<div class="fig-alt" data-alt-for="reverse-plot"><div class="fig-table-wrap"><table class="fig-table"><caption>結末${idx + 1}の因果の一覧（代替表示・全${rows.length}項目）</caption><thead><tr><th scope="col">階層</th><th scope="col">要因の種類</th><th scope="col">項目</th><th scope="col">説明</th><th scope="col">つながる先（結果）</th><th scope="col">認識区分</th><th scope="col">確度</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div>`;
+  return altFold("reverse-plot", `結末${idx + 1}の因果を一覧表で見る`, `<div class="fig-table-wrap"><table class="fig-table"><caption>結末${idx + 1}の因果の一覧（代替表示・全${rows.length}項目）</caption><thead><tr><th scope="col">階層</th><th scope="col">要因の種類</th><th scope="col">項目</th><th scope="col">説明</th><th scope="col">つながる先（結果）</th><th scope="col">認識区分</th><th scope="col">確度</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`);
 }
 
 function legend(t: DesignTokens): string {
@@ -271,5 +271,5 @@ export function renderReversePlot(viz: VizReversePlot, ctx: FigureContext): Raw 
     );
   });
   const intro = `リバースプロット：結末を根にして、上から下へ（画面幅に収まらない木は左から右へ）「直接原因 → 要因 → 根本原因」とたどる木です。`;
-  return raw(`<div class="fig-block fig-b" data-fig="reverse-plot"><p class="fig-caption">${esc(intro)}</p>${legend(t)}${parts.join("")}</div>`);
+  return raw(stackTables(`<div class="fig-block fig-b" data-fig="reverse-plot"><p class="fig-caption">${esc(intro)}</p>${legend(t)}${parts.join("")}</div>`));
 }

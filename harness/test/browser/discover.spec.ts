@@ -71,12 +71,11 @@ test('T08 JS disabled: every work page reachable from /works/; A phase switch vi
         await page.waitForURL(url('/works/'));
       }
     }
-    // A phase switching without JS (AMENDMENT 09: the full figure is behind "図で見る" from 600px; <details> needs no JS)
+    // A phase switching without JS (A10: the figure is shown directly at every width)
     for (const w of m.works.filter((x) => x.figures.A)) {
       for (const width of [768, 1280]) {
         await page.setViewportSize({ width, height: 800 });
         await page.goto(url(w.url + 'relations/'));
-        await page.locator('details.fig-more > summary').first().click();
         const opts = page.locator('.fig-a .fig-switch__opt');
         const n = await opts.count();
         const seen = new Set<string>();

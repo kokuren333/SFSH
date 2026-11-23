@@ -13,7 +13,14 @@
 import type { KnowState, PublicPhase, VizMatrix } from "../public-types.ts";
 import type { DesignTokens } from "../design/tokens-types.ts";
 import { type Raw, esc, raw } from "../html.ts";
-import { type FigureContext, MISSING_LABEL, MISSING_MARK, cmpStr, phaseAttrs, phaseSwitch, sortedPhases } from "./common.ts";
+import { type FigureContext, MISSING_LABEL, MISSING_MARK, altFold, cmpStr, phaseAttrs, phaseSwitch, sortedPhases } from "./common.ts";
+
+/**
+ * A10 (図のルール): columns per phone-width table (reader included). Each secret gets its own small matrix
+ * (rows = phases, columns = reader + people); more people continue in a second table, so at 360/390px the
+ * matrix is shown as a matrix without horizontal scrolling or scaling (fixed table layout, text ≥ font.size.small).
+ */
+export const NARROW_COLUMNS = 4;
 
 /** Default number of visible holder columns (reader included). REQUIREMENTS §6.4: 既定表示の列は8まで. */
 export const DEFAULT_COLUMNS = 8;
@@ -100,16 +107,39 @@ export function renderMatrix(viz: VizMatrix, ctx: FigureContext): Raw | null {
     })
     .join("");
 
+  // Phone width (A10): one small matrix per secret, all phases as rows — readable at 360px without scrolling.
+  const chunks: (typeof holders)[] = [];
+  for (let i = 0; i < holders.length; i += NARROW_COLUMNS) chunks.push(holders.slice(i, i + NARROW_COLUMNS));
+  const mini = secrets
+    .map((s) => {
+      const ep = t.semantic.epistemic[s.epistemic];
+      return chunks
+        .map((hs, ci) => {
+          const headRow = `<tr><th scope="col" class="fig-c__mini-phase">時期</th>${hs.map((h) => `<th scope="col"${h.is_audience ? ' class="fig-c__aud"' : ""}>${esc(h.is_audience ? "読者" : h.label)}</th>`).join("")}</tr>`;
+          const rows = phases
+            .map((p) => `<tr><th scope="row" class="fig-c__mini-phase">${esc(p.label)}</th>${hs.map((h) => `<td class="fig-c__cell${h.is_audience ? " fig-c__aud" : ""}">${mark(t, get(s.id, h.id, p.id))}</td>`).join("")}</tr>`)
+            .join("");
+          const cont = chunks.length > 1 ? `（${ci + 1}/${chunks.length}）` : "";
+          return `<table class="fig-c__mini" data-secret="${esc(s.id)}"><caption class="fig-c__mini-cap"><span class="fig-ep fig-ep--${s.epistemic.replace(/_/g, "-")}" role="img" aria-label="${esc(ep.label)}">${esc(ep.mark)}</span>${esc(s.label)}${esc(cont)}</caption><thead>${headRow}</thead><tbody>${rows}</tbody></table>`;
+        })
+        .join("");
+    })
+    .join("");
+  const narrow =
+    `<figure class="fig-figure fig-c__narrow"><figcaption class="fig-caption">情報の非対称性マトリクス。秘密ごとに、行が物語の段階、列が読者と人物です。各段階で誰がその秘密を知っているかを記号で示します。</figcaption>` +
+    `<ul class="fig-legend" aria-label="凡例">${legendItems}</ul>${mini}</figure>`;
+
   const out =
     `<div class="fig-block fig-c fig-phased" data-fig="matrix">` +
-    `<div class="fig-controls">${phaseSwitch(phases, "fig-c-phase", "フェーズ")}${toggle}</div>` +
-    `<figure class="fig-figure"><figcaption class="fig-caption">${esc(caption)}</figcaption>` +
+    narrow +
+    `<div class="fig-controls fig-c__wide">${phaseSwitch(phases, "fig-c-phase", "フェーズ")}${toggle}</div>` +
+    `<figure class="fig-figure fig-c__wide"><figcaption class="fig-caption">${esc(caption)}</figcaption>` +
     `<ul class="fig-legend" aria-label="凡例">${legendItems}</ul>` +
     `<p class="fig-c__cue">表は枠の中で横にスクロールできます →</p>` +
     `<div class="fig-c__scroll" tabindex="0" role="region" aria-label="情報の非対称性マトリクス（横にスクロールできます）">` +
     `<table class="fig-c__table"><thead>${head}</thead><tbody>${body}</tbody></table></div>` +
     `</figure>` +
-    `<div class="fig-alt" data-alt-for="matrix"><p class="fig-alt__title">フェーズごとの「秘密 → 誰が・どの状態」（代替表示）</p>${alt}</div>` +
+    altFold("matrix", "段階ごとの一覧で見る", `<p class="fig-alt__title">フェーズごとの「秘密 → 誰が・どの状態」（代替表示）</p>${alt}`) +
     `</div>`;
   return raw(out);
 }

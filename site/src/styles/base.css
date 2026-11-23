@@ -64,6 +64,11 @@ nav { display: flex; flex-wrap: wrap; gap: var(--layout-tap-gap); }
 .text-block > h2, .card > h2, .person > h2, .sources > li > h2 { margin-block-start: 0; font-size: var(--fs-h2); }
 .text-block > :last-child, .card > :last-child, .element > :last-child, .person > :last-child { margin-block-end: 0; }
 .lede { font-weight: var(--fw-bold); }
+/* A10 writing spec v2: body text is read as continuous prose (no card frame); cards stay for entrances and navigation */
+.text-block.prose { background: var(--color-bg); border: 0; border-radius: 0; padding: 0; margin-block: var(--space-xl); }
+.text-block.prose > h2 { margin-block: 0 var(--space-m); line-height: var(--lh-heading); }
+.text-block.prose > p { margin-block: 0 var(--space-m); line-height: var(--lh-body); }
+.text-block.prose > .evidence-grade { margin-block-start: var(--space-s); color: var(--color-sub); }
 .evidence-grade, .element-meta, .page-lead, .ref-title { color: var(--color-sub); }
 .evidence-grade { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-s); margin-block-start: var(--space-m); font-size: var(--fs-small); }
 p.evidence-grade { font-size: var(--fs-body); }
@@ -105,6 +110,22 @@ a.chip:hover { text-decoration: none; background: var(--color-border); }
 .nav-row::after { content: "›"; margin-inline-start: auto; color: var(--color-sub); }
 .nav-row__title { font-weight: var(--fw-bold); }
 .nav-row__desc { font-size: var(--fs-small); color: var(--color-sub); }
+/* AMENDMENT 11: long spoiler synopsis — the center of the work page; continuous prose, one spoiler notice, chapter TOC */
+.synopsis { margin-block: var(--space-xl) var(--layout-section-gap); }
+.synopsis > h2 { margin-block: 0 var(--space-m); }
+.synopsis-warning { margin-block: 0 var(--space-l); padding: var(--space-s) var(--space-m); border: var(--line-hair) dashed var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
+.synopsis-warning a { display: inline-block; margin-inline-start: var(--space-xs); }
+.synopsis-intro > p, .synopsis-section > p { margin-block: 0 var(--space-m); line-height: var(--lh-body); }
+.synopsis-intro { margin-block-end: var(--space-l); }
+.synopsis-toc { margin-block: var(--space-m) var(--space-xl); padding: 0 var(--space-m); border-radius: var(--radius-card); background: var(--color-surface); }
+.synopsis-toc > summary { min-height: var(--layout-tap); display: flex; align-items: center; font-weight: var(--fw-bold); }
+.synopsis-toc ol { margin-block: 0; padding-block-end: var(--space-s); }
+.synopsis-toc li { margin-block: var(--space-xs); }
+.synopsis-chapter { margin-block: var(--space-xl); }
+.synopsis-chapter > h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-s); margin-block: 0 var(--space-m); padding-block-start: var(--space-m); border-block-start: var(--line-hair) solid var(--color-border); font-size: var(--fs-h2); }
+.synopsis-chapter__no { font-size: var(--fs-small); color: var(--color-sub); }
+.synopsis-section > h4 { margin-block: var(--space-l) var(--space-s); }
+.synopsis > .evidence-grade { color: var(--color-sub); }
 .facts { display: grid; gap: var(--space-s); }
 .fact { display: grid; gap: var(--space-xs); }
 .fact > dt { font-size: var(--fs-small); color: var(--color-sub); }
@@ -158,8 +179,6 @@ details.spoiler:not(.fc-card) > summary { padding: var(--space-s) var(--space-m)
 
 /* ---------- figure pages ---------- */
 .figure-column { margin-block: var(--layout-figure-gap); min-width: 0; }
-.fig-more { display: none; margin-block: var(--space-xl); }
-.fig-more > summary { padding: var(--space-s) var(--space-m); border: var(--line-hair) solid var(--color-border); border-radius: var(--radius-pill); width: fit-content; }
 .table-frame { overflow-x: auto; max-width: 100%; }
 table { border-collapse: collapse; }
 th, td { padding: var(--space-s); border: var(--line-hair) solid var(--color-border); min-width: var(--layout-tap); height: var(--layout-tap); }
@@ -178,10 +197,9 @@ tr > :first-child { position: sticky; left: 0; background: var(--color-bg); }
   .facts { grid-template-columns: max-content 1fr; column-gap: var(--space-l); }
   .fact { display: contents; }
   .fact > dt { padding-block-start: var(--space-s); }
-  .fig-more { display: block; }
 }
 @media (min-width: 1024px) {
-  .text-column:has(.fig-more[open]) { max-width: var(--layout-figure-max); }
-  .text-column:has(.fig-more[open]) > :not(.figure-column), .text-column:has(.fig-more[open]) .figure-column > :not(.fig-more) { max-width: var(--layout-text-max); margin-inline: auto; }
-  .text-column:has(.fig-more[open]) > h1 { padding-inline: 0; }
+  .text-column:has(.fig-main) { max-width: var(--layout-figure-max); }
+  .text-column:has(.fig-main) > :not(.figure-column), .text-column:has(.fig-main) .figure-column > :not(.fig-main) { max-width: var(--layout-text-max); margin-inline: auto; }
+  .text-column:has(.fig-main) > h1 { padding-inline: 0; }
 }

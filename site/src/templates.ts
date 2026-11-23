@@ -36,8 +36,9 @@ function evidenceGrade(work: PublicWork, ids: string[]): Grade | undefined {
 }
 function block(b: TextBlock, tokens: DesignTokens, work: PublicWork): Raw {
   const grade = evidenceGrade(work, b.based_on);
-  // AMENDMENT 09: a card — title, lede (first paragraph), body, then a quiet meta line (mark + label + grade).
-  return spoiler(b.spoiler, html`<section class="text-block" id="${b.id}">${b.heading ? html`<h2>${b.heading}</h2>` : null}${b.paragraphs.map((p, i) => html`<p${i === 0 && b.paragraphs.length > 1 ? html` class="lede"` : null}>${p}</p>`)}<div class="evidence-grade">${badge(b.epistemic, tokens)}<span class="evidence-grade__text">${grade ? html`根拠要素の信頼度: ${grade}` : html`信頼度: 未付与`}</span></div></section>`);
+  // A10 writing spec v2: body text is continuous prose — a section (subheading + ordinary paragraphs), not a card.
+  // The epistemic mark and grade stay as a quiet line under the section (fact / interpretation layers, C-6).
+  return spoiler(b.spoiler, html`<section class="text-block prose" id="${b.id}">${b.heading ? html`<h2>${b.heading}</h2>` : null}${b.paragraphs.map(p => html`<p>${p}</p>`)}<div class="evidence-grade">${badge(b.epistemic, tokens)}<span class="evidence-grade__text">${grade ? html`根拠要素の信頼度: ${grade}` : html`信頼度: 未付与`}</span></div></section>`);
 }
 /** S2 analysis prose (CP-026): always labelled 「独自分析」 with the sfsh_analysis mark, never by color alone. */
 function analysisBlock(text: string | null, tokens: DesignTokens): Raw | null {
@@ -76,7 +77,8 @@ export function indexBody(index: SiteInputIndex): Raw {
 }
 export function topBody(index: SiteInputIndex): Raw {
   const recent = [...index.works].sort((a, b) => (b.first_published_at || '').localeCompare(a.first_published_at || '') || compareReading(a, b)).slice(0, 12);
-  return html`${searchForm('./', 'top-q')}<section><h2>新着</h2>${rows(recent, './', index)}</section><section><h2>ジャンルから探す</h2>${entrances(index, 'genres', './')}</section><section><h2>媒体から探す</h2>${entrances(index, 'media', './')}</section><a href="./works/">すべての作品を見る</a>`;
+  // AMENDMENT 10-5: the search form lives only in the common header (no second form in the top page body).
+  return html`<section><h2>新着</h2>${rows(recent, './', index)}</section><section><h2>ジャンルから探す</h2>${entrances(index, 'genres', './')}</section><section><h2>媒体から探す</h2>${entrances(index, 'media', './')}</section><a href="./works/">すべての作品を見る</a>`;
 }
 export function entrances(index: SiteInputIndex, axis: 'genres' | 'media', p: string): Raw {
   return html`<ul class="entrances">${index.vocab[axis].map(v => {
@@ -230,6 +232,24 @@ function navRow(work: PublicWork, k: Subpage, p: string): Raw {
 }
 const chip = (text: string, href?: string, sub?: string | null): Raw =>
   href ? html`<li><a class="chip" href="${href}">${text}${sub ? html`<span class="chip__sub">${sub}</span>` : null}</a></li>` : html`<li><span class="chip chip--plain">${text}${sub ? html`<span class="chip__sub">${sub}</span>` : null}</span></li>`;
+/**
+ * AMENDMENT 11: 「あらすじ（全編・ネタバレ）」 — the center of the work page. One clear spoiler notice at the top (with a
+ * skip link) instead of per-block folding (folding every section would hide the page's main text). Chapters are
+ * h3, sections h4; continuous prose under writing spec v2. The fact / analysis marks and the grade stay as one
+ * quiet line at the end (C-6).
+ */
+function synopsisSection(work: PublicWork, tokens: DesignTokens): Raw | null {
+  const s = work.pages.synopsis;
+  if (!s || !s.chapters.length) return null;
+  const all = [...s.intro, ...s.chapters.flatMap(c => c.blocks)];
+  const eps = [...new Set(all.map(b => b.epistemic))];
+  const grade = evidenceGrade(work, [...new Set(all.flatMap(b => b.based_on))]);
+  const para = (b: TextBlock) => b.paragraphs.map(p => html`<p>${p}</p>`);
+  const toc = html`<details class="synopsis-toc"><summary>目次（全${s.chapters.length}章）</summary><ol>${s.chapters.map((c, i) => html`<li><a href="#${c.id}">第${i + 1}章 ${c.heading}</a></li>`)}</ol></details>`;
+  const chapter = (c: NonNullable<PublicWork['pages']['synopsis']>['chapters'][number], i: number) =>
+    html`<section class="synopsis-chapter" id="${c.id}" aria-labelledby="${c.id}-h"><h3 id="${c.id}-h"><span class="synopsis-chapter__no">第${i + 1}章</span>${c.heading}</h3>${c.blocks.map(b => html`<section class="synopsis-section" id="${b.id}">${b.heading ? html`<h4>${b.heading}</h4>` : null}${para(b)}</section>`)}</section>`;
+  return html`<section class="synopsis" aria-labelledby="synopsis-h"><h2 id="synopsis-h">あらすじ（全編・ネタバレ）</h2><p class="synopsis-warning" role="note"><strong>ネタバレ注意:</strong> このあらすじは物語の冒頭から結末までを明かします。調査で確認できた出来事の範囲で構成しています。<a href="#after-synopsis">あらすじを飛ばす</a></p>${s.intro.length ? html`<div class="synopsis-intro">${s.intro.map(para)}</div>` : null}${toc}${s.chapters.map(chapter)}<div class="evidence-grade">${eps.map(ep => badge(ep, tokens))}<span class="evidence-grade__text">${grade ? html`根拠要素の信頼度: ${grade}` : html`信頼度: 未付与`}</span></div></section>`;
+}
 export function workBody(work: PublicWork, index: SiteInputIndex, tokens: DesignTokens): Raw {
   const w = work.work;
   const essence = ESSENCE.filter(k => hasSubpage(work, k));
@@ -245,7 +265,7 @@ export function workBody(work: PublicWork, index: SiteInputIndex, tokens: Design
   const info = html`<section class="card work-info"><h2>作品情報</h2><dl class="facts">${facts}</dl></section>`;
   const more = others.length ? html`<section class="more-pages" aria-labelledby="more-h"><h2 id="more-h">さらに読む</h2><ul class="nav-list" aria-label="そのほかのページ">${others.map(k => navRow(work, k, ''))}</ul></section>` : null;
   const gaps = work.gaps.length ? html`<details class="help"><summary>情報不足で載せていない観点（${work.gaps.length}件）</summary><ul>${work.gaps.map(g => html`<li>この観点は情報不足のため未掲載: ${g.aspect_label}</li>`)}</ul></details>` : null;
-  return html`${head}${nav}<div class="overview">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
+  return html`${head}${nav}${synopsisSection(work, tokens)}<div class="overview" id="after-synopsis">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
 }
 export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignTokens, module: FigureModule | null): Raw {
   const crumbs = html`<nav class="breadcrumbs" aria-label="パンくず"><a href="../../../">トップ</a> › <a href="../../../works/">作品索引</a> › <a href="../">${work.work.title}</a> › ${subpages[page]}</nav>`;

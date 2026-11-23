@@ -2,7 +2,7 @@
 
 物語作品（小説・映画・アニメなど）について、公開ウェブ上の二次情報を調べ、「物語の認知モデル」——何が起きたか／誰が何を望みどう変わったか／なぜその展開か／なぜ面白いか——を構造化したグラフ（Narrative Knowledge Graph, NKG）にまとめ、静的サイトとして公開するためのローカル実行ハーネスです。
 
-- 公開サイト: **https://kokuren333.github.io/sfsh-site/** （サイト名は「SFSH（仮称）」。サイトのリポジトリ: https://github.com/kokuren333/sfsh-site ）
+- 公開サイト: **https://kokuren333.github.io/sfsh-site/** （サイト名は「SFSH」。サイトのリポジトリ: https://github.com/kokuren333/sfsh-site ）
 - このリポジトリ: ハーネス本体（コード・テスト・スキーマ・設定・設計文書）
 - ライセンス: [Apache License 2.0](LICENSE)
 

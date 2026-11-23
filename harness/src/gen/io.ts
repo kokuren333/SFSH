@@ -12,12 +12,15 @@ export const GEN_FILES = {
   page: (page: string) => `gen/pages/${page}.json`,
   reviewPages: "gen/reviews/pages.json",
   writeReport: "gen/write_report.json",
+  /** AMENDMENT 11: long spoiler synopsis (gen/pages/synopsis.json + gen/reviews/synopsis.json + this report). */
+  synopsisReport: "gen/synopsis_report.json",
+  reviewSynopsis: "gen/reviews/synopsis.json",
   public: "gen/public.json",
   genCheck: "gen/gen_check.json",
 } as const;
 
 /** Internal page files written by writePages (one per page key). */
-export const PAGE_KEYS = ["overview", "figure_notes", "themes", "context", "interpretations", "quiz"] as const;
+export const PAGE_KEYS = ["overview", "figure_notes", "themes", "context", "interpretations", "quiz", "synopsis"] as const;
 export type PageKey = (typeof PAGE_KEYS)[number];
 
 export interface VocabEntry {

@@ -35,8 +35,8 @@ before(async () => {
 });
 after(async () => { if (tmp?.startsWith(tmpdir())) await rm(tmp, { recursive: true, force: true }); });
 
-test('committed harness/config/site.json is the post-opening setting (CP-048): name undecided (U-14), window = sfsh-site Issues (U-10)', async () => {
-  const opened = { site_name: null, contact: { kind: 'issues', url: OPENED_ISSUES } };
+test('committed harness/config/site.json is the post-opening setting (CP-048): name SFSH (AMENDMENT 10), window = sfsh-site Issues (U-10)', async () => {
+  const opened = { site_name: 'SFSH', contact: { kind: 'issues', url: OPENED_ISSUES } };
   assert.deepEqual(await loadSiteSettings(), opened);
   assert.deepEqual(JSON.parse(await readFile(siteSettingsPath, 'utf8')), opened);
   assert.deepEqual(DEFAULT_SITE_SETTINGS, { site_name: null, contact: { kind: 'issues', url: null } }, 'code default = pre-opening (no link)');
@@ -66,11 +66,12 @@ test('the four common pages exist, are static (no script), listed in the HTML si
   for (const phrase of ['対象の作品名', '対象のページの URL', '取り下げを求める理由', '個人情報', '15分以内', '検索エンジンのキャッシュ']) assert.ok(takedown.includes(phrase), phrase);
 });
 
-test('committed settings: provisional name SFSH（仮称） in header and titles; takedown links the sfsh-site Issues; no other GitHub link', async () => {
+test('committed settings: official name SFSH (AMENDMENT 10) in header and titles, no 仮称; takedown links the sfsh-site Issues; no other GitHub link', async () => {
   for (const path of defFiles.filter(p => p.endsWith('.html'))) {
     const page = await read(defOut, path);
     assert.ok(page.includes(`<a class="site-name" href="`) && page.includes(`">${FALLBACK_SITE_NAME}</a>`), path);
     assert.match(page, new RegExp(`<title>[^<]* \\| ${FALLBACK_SITE_NAME}</title>`), path);
+    assert.ok(!page.includes('仮称'), `仮称 left in ${path}`);
     const gh = page.match(/<a href="https:\/\/github\.com[^"]*"/g) ?? [];
     assert.deepEqual(gh, path === 'takedown/index.html' ? [`<a href="${OPENED_ISSUES}"`] : [], path);
   }

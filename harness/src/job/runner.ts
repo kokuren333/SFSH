@@ -13,7 +13,7 @@ import { readClaims, readGaps, readSources, readFetchLog, writeBudget } from "..
 import { assertCardsTraceable, runSearch } from "../research/search.ts";
 import { DEFAULT_BUDGET, type BudgetLimits, type BudgetState, type Fetcher } from "../research/types.ts";
 import { readWork } from "../works/store.ts";
-import { composePublic, projectPublic, suggestTags, writePages } from "../gen/index.ts";
+import { composePublic, projectPublic, suggestTags, writePages, writeSynopsis } from "../gen/index.ts";
 import { summarizeReviews } from "../nkg/reviewSummary.ts";
 import { autoCheck, formatNotice } from "../check/index.ts";
 import type { StageContext, StageResult } from "./context.ts";
@@ -233,7 +233,12 @@ export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Pro
   switch (name) {
     case "write":
       return async (ctx) => {
-        const r = await writePages(ctx);
+        // AMENDMENT 11: the page text and the long synopsis are written in parallel (both read the projection only
+        // and write separate files); ctx.writeParts selects one of them (regen --parts).
+        const parts = ctx.writeParts ?? ["pages", "synopsis"];
+        const results = await Promise.all([parts.includes("pages") ? writePages(ctx) : null, parts.includes("synopsis") ? writeSynopsis(ctx) : null]);
+        const done = results.filter((x): x is StageResult => !!x);
+        const r: StageResult = { outputs: done.flatMap((x) => x.outputs), metrics: Object.assign({}, ...done.map((x) => x.metrics)), warnings: done.flatMap((x) => x.warnings) };
         try {
           summarizeReviews(ctx.workDir, ctx.now()); // include gen/reviews/*.json in review_summary + work.json review_stats (3.3-4)
         } catch (e) {

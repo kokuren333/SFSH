@@ -6,8 +6,10 @@
  *  - runs the deterministic 30-char guard against saved source raw text: one Haiku rewrite, then sentence drop;
  *  - keeps only based_on ids present in the projection (blocks left without any basis are dropped, C-7);
  *  - block spoiler = max(declared, based_on spoilers); epistemic = canon only if declared canon and all based_on canon.
- *  - AMENDMENT 09 card layout: lede / paragraph / heading lengths are checked deterministically and recorded as
- *    advisory warnings in write_report.json (`card_spec`) — never dropped or truncated (AMENDMENT 06).
+ *  - writing spec v2 (AMENDMENT 10-3): Haiku writes in parallel parts (frame = overview + figure notes + quiz, and
+ *    one call per core essay page); the prose volume per page, over-long paragraphs and mechanical hedges are
+ *    measured deterministically and recorded as advisory in write_report.json (`prose_spec`) — never dropped or
+ *    truncated (AMENDMENT 06).
  * Outputs (internal): gen/pages/<page>.json, gen/reviews/pages.json, gen/write_report.json.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -33,7 +35,10 @@ import { sha256Hex } from "../util/hash.ts";
 import { GEN_FILES, claimIdsOf, maxSpoiler, type PageKey } from "./io.ts";
 import { citableIds } from "./project.ts";
 import {
-  CARD_LIMITS,
+  HEDGE_PATTERNS,
+  MAX_ESSAY_SECTIONS,
+  MAX_OVERVIEW_SECTIONS,
+  PROSE_SPEC,
   REWRITE_SCHEMA,
   WRITE_REVISION_SCHEMA,
   WRITE_SCHEMA,
@@ -42,16 +47,28 @@ import {
   writeReviewPrompt,
   writeRevisePrompt,
   type ReviewUnitView,
+  type WritePart,
 } from "./prompts.ts";
 import { S3_TIMEOUT_MS } from "./tags.ts";
 
 /** §5.1 A-1 / PLAN M1 §2: continuous verbatim match threshold (normalized chars). */
 export const VERBATIM_THRESHOLD = 30;
-/** AMENDMENT 09 asks for exactly 3 overview blocks; up to 4 are kept (tolerant), a count ≠ 3 is an advisory in card_spec. */
-export const MAX_OVERVIEW_BLOCKS = 4;
+/** Writing spec v2: up to MAX_OVERVIEW_SECTIONS overview sections are kept (tolerant; the target is 3–4). */
+export const MAX_OVERVIEW_BLOCKS = MAX_OVERVIEW_SECTIONS;
+/** Core essay pages (writing spec v2). */
+export const ESSAY_PAGES = ["themes", "context", "interpretations"] as const;
+export type EssayPage = (typeof ESSAY_PAGES)[number];
+/**
+ * Which essay pages are written. themes and interpretations are always written (the site always emits those pages;
+ * without items the essay works from motives / arcs / events as SFSH analysis); context needs context or iconic
+ * items (reception cannot be inferred from the story elements).
+ */
+export function essayPages(pw: PublicWork): Record<EssayPage, boolean> {
+  return { themes: true, context: pw.pages.context.items.length + pw.pages.context.iconic.length > 0, interpretations: true };
+}
 
-type Slot = "overview" | "relations" | "reverse_plot" | "matrix" | "intro" | "quiz";
-type DeclaredEpistemic = "canon" | "sfsh_analysis";
+export type Slot = "overview" | "relations" | "reverse_plot" | "matrix" | "intro" | "quiz" | "synopsis";
+export type DeclaredEpistemic = "canon" | "sfsh_analysis";
 
 export interface Unit {
   id: string;
@@ -82,6 +99,9 @@ export interface PageFile {
   generated_at: string;
   blocks: InternalBlock[];
   items?: InternalQuiz[];
+  /** AMENDMENT 11 (synopsis page only): chapter order and headings; blocks are referenced by id. */
+  intro_ids?: string[];
+  chapters?: { id: string; heading: string; block_ids: string[] }[];
 }
 
 export interface GuardRecord {
@@ -101,11 +121,36 @@ export interface WriteReport {
   dropped_no_basis: string[];
   based_on_filtered: { id: string; removed: string[] }[];
   guard: { sources_checked: number; sources_missing: string[]; threshold: number; records: GuardRecord[] };
-  /** AMENDMENT 09 card layout check (advisory only; absent in reports written before it). */
+  /** AMENDMENT 09 card layout check (reports written before A10 only). */
   card_spec?: CardSpecReport;
+  /** Writing spec v2 measurement (advisory only; A10 and later). */
+  prose_spec?: ProseSpecReport;
   warnings: string[];
 }
 
+export interface ProsePageMeasure {
+  page: string;
+  sections: number;
+  chars: number;
+  paragraphs: number;
+  /** Target [min, max] characters for this page (null = no target, e.g. quiz). */
+  target: readonly [number, number] | null;
+  hedges: number;
+}
+export interface ProseSpecReport {
+  spec: typeof PROSE_SPEC;
+  pages: ProsePageMeasure[];
+  /** Characters of all prose blocks (overview + figure notes + essays), quiz excluded. */
+  prose_chars: number;
+  quiz_chars: number;
+  /** Paragraphs longer than PROSE_SPEC.paragraphMax (split for phone reading is asked for). */
+  long_paragraphs: { id: string; index: number; chars: number }[];
+  /** Pages below / above their character target. */
+  below_target: string[];
+  above_target: string[];
+  /** Pages whose hedge count is above PROSE_SPEC.hedgesPerPage. */
+  hedge_over: string[];
+}
 export interface CardSpecFinding {
   id: string;
   /** heading | lede | paragraphs[i] | block_total | question | answer | explanation */
@@ -124,11 +169,11 @@ export interface CardSpecReport {
 }
 
 const SPOILERS = new Set(["none", "mid", "ending"]);
-const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-const asSpoiler = (v: unknown): Spoiler => (SPOILERS.has(String(v)) ? (v as Spoiler) : "none");
-const asEpi = (v: unknown): DeclaredEpistemic => (v === "canon" ? "canon" : "sfsh_analysis");
-const paras = (v: unknown): string[] => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
-const ids = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter(Boolean))];
+export const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+export const asSpoiler = (v: unknown): Spoiler => (SPOILERS.has(String(v)) ? (v as Spoiler) : "none");
+export const asEpi = (v: unknown): DeclaredEpistemic => (v === "canon" ? "canon" : "sfsh_analysis");
+export const paras = (v: unknown): string[] => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
+export const ids = (v: unknown): string[] => [...new Set((Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter(Boolean))];
 
 // ------------------------------------------------------------------ inputs for the models
 /**
@@ -183,11 +228,11 @@ export function elementsForPrompt(pw: PublicWork): string {
   });
 }
 
-function unitText(u: Unit): string {
+export function unitText(u: Unit): string {
   if (u.quiz) return `問: ${u.quiz.question}\n答: ${u.quiz.answer}\n解説: ${u.quiz.explanation}`;
   return [u.heading ? `【${u.heading}】` : "", ...u.paragraphs].filter(Boolean).join("\n");
 }
-const view = (u: Unit): ReviewUnitView => ({ id: u.id, page: `${u.page}/${u.slot}`, text: unitText(u), based_on: u.based_on, spoiler: u.spoiler, epistemic: u.epistemic });
+export const view = (u: Unit): ReviewUnitView => ({ id: u.id, page: `${u.page}/${u.slot}`, text: unitText(u), based_on: u.based_on, spoiler: u.spoiler, epistemic: u.epistemic });
 
 /** Turn Haiku's write output into units (structure fixed by code: ids, slots, quiz ids). */
 export function unitsFromWrite(out: unknown, pw: PublicWork): Unit[] {
@@ -214,12 +259,19 @@ export function unitsFromWrite(out: unknown, pw: PublicWork): Unit[] {
     const u = b ? block(b, `fn_${fig}`, "figure_notes", fig) : null;
     if (u) units.push(u);
   }
-  const hasItems = { themes: pw.pages.themes.items.length > 0, context: pw.pages.context.items.length + pw.pages.context.iconic.length > 0, interpretations: pw.pages.interpretations.items.length > 0 };
-  for (const page of ["themes", "context", "interpretations"] as const) {
-    if (!hasItems[page]) continue;
-    const b = ((Array.isArray(o.intros) ? o.intros : []) as Record<string, unknown>[]).find((x) => x?.page === page);
-    const u = b ? block(b, `${page}_intro01`, page, "intro") : null;
-    if (u) units.push(u);
+  // v2: each core page is an essay of several sections (blocks) in reading order: <page>_intro01, _intro02, ...
+  const pages = essayPages(pw);
+  for (const page of ESSAY_PAGES) {
+    if (!pages[page]) continue;
+    let k = 0;
+    for (const b of ((Array.isArray(o.intros) ? o.intros : []) as Record<string, unknown>[]).filter((x) => x?.page === page)) {
+      if (k >= MAX_ESSAY_SECTIONS) break;
+      const u = block(b, `${page}_intro${String(k + 1).padStart(2, "0")}`, page, "intro");
+      if (u) {
+        units.push(u);
+        k++;
+      }
+    }
   }
   const written = new Map(((Array.isArray(o.quiz) ? o.quiz : []) as Record<string, unknown>[]).map((q) => [str(q?.quiz_id), q] as const));
   for (const q of pw.pages.quiz) {
@@ -273,7 +325,7 @@ export function splitSentences(p: string): string[] {
   return (p.match(/[^。！？!?\n]+[。！？!?」』）)]*|[。！？!?]+/g) ?? []).filter((s) => s.trim());
 }
 
-interface SourceIndex {
+export interface SourceIndex {
   windows: Set<string>;
   checked: number;
   missing: string[];
@@ -327,8 +379,10 @@ function dropFlagged(u: Unit, idx: Set<string>, rec: GuardRecord): Unit | null {
   return next.paragraphs.length ? next : null;
 }
 
-// ------------------------------------------------------------------ card layout (advisory)
-const chars = (s: string) => [...s].length;
+// ------------------------------------------------------------------ card layout (AMENDMENT 09, legacy; superseded by proseSpecCheck)
+export const chars = (s: string) => [...s].length;
+/** AMENDMENT 09 card limits — no longer used by the S3 write (A10 writing spec v2); kept for reading old reports. */
+export const CARD_LIMITS = { heading: 14, lede: 60, paragraph: 120, overviewBlock: 300, overviewBlocks: 3, quizQuestion: 60, quizAnswer: 60, quizExplanation: 120 } as const;
 
 /** AMENDMENT 09: deterministic, advisory-only check of the card layout. Never changes the units. */
 export function cardSpecCheck(units: Unit[]): CardSpecReport {
@@ -359,6 +413,98 @@ export function cardSpecCheck(units: Unit[]): CardSpecReport {
   };
 }
 
+/** Writing spec v2 (AMENDMENT 10-3): deterministic, advisory-only measurement of the prose. Never changes the units. */
+export function proseSpecCheck(units: Unit[]): ProseSpecReport {
+  const hedgeCount = (t: string) => HEDGE_PATTERNS.reduce((n, h) => n + t.split(h).length - 1, 0);
+  const prose = units.filter((u) => !u.quiz);
+  const groups: { page: string; target: readonly [number, number] | null; us: Unit[] }[] = [
+    { page: "overview", target: PROSE_SPEC.overviewChars, us: prose.filter((u) => u.slot === "overview") },
+    ...(["relations", "reverse_plot", "matrix"] as const).map((f) => ({ page: `figure_notes.${f}`, target: PROSE_SPEC.figureNoteChars, us: prose.filter((u) => u.slot === f) })),
+    ...ESSAY_PAGES.map((p) => ({ page: p, target: PROSE_SPEC.essayChars, us: prose.filter((u) => u.page === p) })),
+  ].filter((g) => g.us.length);
+  const measure = (us: Unit[]) => us.reduce((n, u) => n + u.paragraphs.reduce((m, x) => m + chars(x), 0) + (u.heading ? chars(u.heading) : 0), 0);
+  const pages: ProsePageMeasure[] = groups.map((g) => ({
+    page: g.page,
+    sections: g.us.length,
+    chars: measure(g.us),
+    paragraphs: g.us.reduce((n, u) => n + u.paragraphs.length, 0),
+    target: g.target,
+    hedges: g.us.reduce((n, u) => n + hedgeCount([u.heading ?? "", ...u.paragraphs].join("")), 0),
+  }));
+  const quiz = units.filter((u) => u.quiz);
+  const long: ProseSpecReport["long_paragraphs"] = [];
+  for (const u of prose) u.paragraphs.forEach((x, i) => (chars(x) > PROSE_SPEC.paragraphMax ? long.push({ id: u.id, index: i, chars: chars(x) }) : null));
+  return {
+    spec: PROSE_SPEC,
+    pages,
+    prose_chars: measure(prose),
+    quiz_chars: quiz.reduce((n, u) => n + chars(u.quiz!.question) + chars(u.quiz!.answer) + chars(u.quiz!.explanation), 0),
+    long_paragraphs: long,
+    below_target: pages.filter((p) => p.target && p.chars < p.target[0]).map((p) => p.page),
+    above_target: pages.filter((p) => p.target && p.chars > p.target[1]).map((p) => p.page),
+    hedge_over: pages.filter((p) => p.hedges > PROSE_SPEC.hedgesPerPage).map((p) => p.page),
+  };
+}
+
+/**
+ * Deterministic 30-char guard against saved source raw text (A-1 at write time): blocks with flagged sentences get
+ * one Haiku rewrite; sentences still flagged after it are dropped (a unit left empty is dropped). Shared by the
+ * page write and the synopsis write (AMENDMENT 11).
+ */
+export async function applyVerbatimGuard(
+  ctx: StageContext,
+  title: string,
+  units: Unit[],
+  warnings: string[],
+  opts: { prompt?: (units: { id: string; text: string; flagged: string[]; isQuiz: boolean }[]) => string; task?: string } = {},
+): Promise<{ units: Unit[]; records: GuardRecord[]; src: SourceIndex; calls: number }> {
+  let calls = 0;
+  const buildPrompt = opts.prompt ?? ((us: { id: string; text: string; flagged: string[]; isQuiz: boolean }[]) => rewritePrompt({ title, units: us }));
+  const src = buildSourceIndex(ctx.workDir);
+  if (src.missing.length) warnings.push(`write: raw text missing for ${src.missing.length} source(s) — not checked: ${src.missing.join(", ")}`);
+  const records: GuardRecord[] = [];
+  const flagged = units.map((u) => ({ u, f: flaggedSentences(u, src.windows) })).filter((x) => x.f.length);
+  if (flagged.length) {
+    let rewritten = new Map<string, Record<string, unknown>>();
+    try {
+      const r = await ctx.haiku.call({
+        task: opts.task ?? "s3.write.rewrite",
+        prompt: buildPrompt(flagged.map(({ u, f }) => ({ id: u.id, text: unitText(u), flagged: f.map((x) => x.text), isQuiz: !!u.quiz }))),
+        schema: REWRITE_SCHEMA,
+        jobId: ctx.jobId,
+        timeoutMs: S3_TIMEOUT_MS,
+      });
+      calls++;
+      rewritten = new Map(((r.output as { units?: Record<string, unknown>[] }).units ?? []).map((x) => [str(x?.id), x] as const));
+    } catch (e) {
+      warnings.push(`write: rewrite call failed (${(e as Error).message.slice(0, 160)}) — flagged sentences are dropped`);
+    }
+    const flaggedIds = new Map(flagged.map(({ u, f }) => [u.id, f.length] as const));
+    const next: Unit[] = [];
+    for (const u0 of units) {
+      if (!flaggedIds.has(u0.id)) {
+        next.push(u0);
+        continue;
+      }
+      const rw = rewritten.get(u0.id);
+      let u: Unit = { ...u0, quiz: u0.quiz ? { ...u0.quiz } : null };
+      if (rw) {
+        if (u.quiz) for (const f of ["question", "answer", "explanation"] as const) u.quiz[f] = str(rw[f]) || u.quiz[f];
+        else if (paras(rw.paragraphs).length) u.paragraphs = paras(rw.paragraphs);
+      }
+      const rec: GuardRecord = { id: u.id, flagged_sentences: flaggedIds.get(u.id)!, rewritten: !!rw, still_flagged_after_rewrite: 0, dropped_sentences: [], dropped_unit: false };
+      rec.still_flagged_after_rewrite = flaggedSentences(u, src.windows).length;
+      const kept = rec.still_flagged_after_rewrite ? dropFlagged(u, src.windows, rec) : u;
+      if (kept) next.push(kept);
+      else rec.dropped_unit = true;
+      records.push(rec);
+    }
+    units = next;
+  }
+
+  return { units, records, src, calls };
+}
+
 // ------------------------------------------------------------------ stage
 function reviewClaims(workDir: string, pw: PublicWork) {
   const nkg = readJson<Nkg | null>(workDir, "nkg/nkg.json", null);
@@ -373,7 +519,7 @@ function reviewClaims(workDir: string, pw: PublicWork) {
   return want.map((id) => active.get(id)).filter((c): c is NonNullable<typeof c> => !!c);
 }
 
-function unresolvedOf<S>(o: ReviewOutcome<S>): UnresolvedEntry[] {
+export function unresolvedOf<S>(o: ReviewOutcome<S>): UnresolvedEntry[] {
   if (o.unresolved) return o.unresolved;
   // fallback for an older review.ts: derive from the last round that targeted each disputed id
   const out: UnresolvedEntry[] = [];
@@ -395,26 +541,40 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
   const warnings: string[] = [];
   let calls = 0;
 
-  // 1) Haiku writes everything from the projection only
-  const w = await ctx.haiku.call({
-    task: "s3.write",
-    prompt: writePrompt({
-      title,
-      elements,
-      figures: { relations: pw.viz.relations.characters.length > 0, reverse_plot: pw.viz.reverse_plot.trees.length > 0, matrix: pw.viz.matrix !== null },
-      intros: {
-        themes: pw.pages.themes.items.length > 0,
-        context: pw.pages.context.items.length + pw.pages.context.iconic.length > 0,
-        interpretations: pw.pages.interpretations.items.length > 0,
-      },
-      quiz: pw.pages.quiz,
-    }),
-    schema: WRITE_SCHEMA,
-    jobId: ctx.jobId,
-    timeoutMs: S3_TIMEOUT_MS,
-  });
-  calls++;
-  const written = unitsFromWrite(w.output, pw);
+  // 1) Haiku writes everything from the projection only — v2: one call per part, in parallel (frame + each essay page)
+  const essays = essayPages(pw);
+  const parts: WritePart[] = ["frame", ...ESSAY_PAGES.filter((p) => essays[p])];
+  const outs = await Promise.all(
+    parts.map((part) =>
+      ctx.haiku.call({
+        task: "s3.write",
+        prompt: writePrompt({
+          title,
+          elements,
+          figures: { relations: pw.viz.relations.characters.length > 0, reverse_plot: pw.viz.reverse_plot.trees.length > 0, matrix: pw.viz.matrix !== null },
+          intros: essays,
+          hasInterpretationItems: pw.pages.interpretations.items.length > 0,
+          part,
+          quiz: pw.pages.quiz,
+        }),
+        schema: WRITE_SCHEMA,
+        jobId: ctx.jobId,
+        timeoutMs: S3_TIMEOUT_MS,
+      }),
+    ),
+  );
+  calls += outs.length;
+  const pick = (part: WritePart, key: string): unknown[] => {
+    const v = ((outs[parts.indexOf(part)]?.output ?? {}) as Record<string, unknown>)[key];
+    return Array.isArray(v) ? v : [];
+  };
+  const merged = {
+    overview: pick("frame", "overview"),
+    figure_notes: pick("frame", "figure_notes"),
+    quiz: pick("frame", "quiz"),
+    intros: parts.filter((p) => p !== "frame").flatMap((p) => pick(p, "intros").filter((x) => (x as Record<string, unknown>)?.page === p)),
+  };
+  const written = unitsFromWrite(merged, pw);
   const unitsWritten = written.length;
 
   // 2) Luna reviews (findings only), Haiku revises — max 2 rounds
@@ -456,47 +616,11 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
   let units = outcome.state.filter((u) => !deleted.includes(u.id));
 
   // 3) deterministic 30-char guard against saved source text: one rewrite, then sentence drop
-  const src = buildSourceIndex(ctx.workDir);
-  if (src.missing.length) warnings.push(`write: raw text missing for ${src.missing.length} source(s) — not checked: ${src.missing.join(", ")}`);
-  const records: GuardRecord[] = [];
-  const flagged = units.map((u) => ({ u, f: flaggedSentences(u, src.windows) })).filter((x) => x.f.length);
-  if (flagged.length) {
-    let rewritten = new Map<string, Record<string, unknown>>();
-    try {
-      const r = await ctx.haiku.call({
-        task: "s3.write.rewrite",
-        prompt: rewritePrompt({ title, units: flagged.map(({ u, f }) => ({ id: u.id, text: unitText(u), flagged: f.map((x) => x.text), isQuiz: !!u.quiz })) }),
-        schema: REWRITE_SCHEMA,
-        jobId: ctx.jobId,
-        timeoutMs: S3_TIMEOUT_MS,
-      });
-      calls++;
-      rewritten = new Map(((r.output as { units?: Record<string, unknown>[] }).units ?? []).map((x) => [str(x?.id), x] as const));
-    } catch (e) {
-      warnings.push(`write: rewrite call failed (${(e as Error).message.slice(0, 160)}) — flagged sentences are dropped`);
-    }
-    const flaggedIds = new Map(flagged.map(({ u, f }) => [u.id, f.length] as const));
-    const next: Unit[] = [];
-    for (const u0 of units) {
-      if (!flaggedIds.has(u0.id)) {
-        next.push(u0);
-        continue;
-      }
-      const rw = rewritten.get(u0.id);
-      let u: Unit = { ...u0, quiz: u0.quiz ? { ...u0.quiz } : null };
-      if (rw) {
-        if (u.quiz) for (const f of ["question", "answer", "explanation"] as const) u.quiz[f] = str(rw[f]) || u.quiz[f];
-        else if (paras(rw.paragraphs).length) u.paragraphs = paras(rw.paragraphs);
-      }
-      const rec: GuardRecord = { id: u.id, flagged_sentences: flaggedIds.get(u.id)!, rewritten: !!rw, still_flagged_after_rewrite: 0, dropped_sentences: [], dropped_unit: false };
-      rec.still_flagged_after_rewrite = flaggedSentences(u, src.windows).length;
-      const kept = rec.still_flagged_after_rewrite ? dropFlagged(u, src.windows, rec) : u;
-      if (kept) next.push(kept);
-      else rec.dropped_unit = true;
-      records.push(rec);
-    }
-    units = next;
-  }
+  const guarded = await applyVerbatimGuard(ctx, title, units, warnings);
+  calls += guarded.calls;
+  units = guarded.units;
+  const src = guarded.src;
+  const records = guarded.records;
 
   // 4) based_on → projection ids only; no basis → dropped (C-7). Quiz falls back to the node's refs.
   const basedOnFiltered: WriteReport["based_on_filtered"] = [];
@@ -516,19 +640,13 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
     finalUnits.push({ ...u, based_on: based });
   }
 
-  // 4b) card layout (AMENDMENT 09) — advisory only, nothing is dropped or truncated
-  const cardSpec = cardSpecCheck(finalUnits);
-  if (cardSpec.overview_blocks !== cardSpec.overview_blocks_expected)
-    warnings.push(`write: card spec: ${cardSpec.overview_blocks} overview block(s) (expected ${cardSpec.overview_blocks_expected}) — kept as written`);
-  if (cardSpec.over_limit.length)
-    warnings.push(
-      `write: card spec: ${cardSpec.over_limit.length} field(s) over the length limit (advisory, kept): ${cardSpec.over_limit
-        .slice(0, 6)
-        .map((f) => `${f.id}.${f.field} ${f.chars}/${f.limit}`)
-        .join(", ")}`,
-    );
-  if (cardSpec.paragraph_count.length)
-    warnings.push(`write: card spec: ${cardSpec.paragraph_count.length} block(s) outside the paragraph count (advisory, kept): ${cardSpec.paragraph_count.map((c) => `${c.id} ${c.paragraphs} (${c.expected})`).join(", ")}`);
+  // 4b) writing spec v2 (AMENDMENT 10-3) — measured and recorded as advisory only, nothing is dropped or truncated
+  const proseSpec = proseSpecCheck(finalUnits);
+  if (proseSpec.below_target.length)
+    warnings.push(`write: prose spec: below the length target (advisory, kept): ${proseSpec.pages.filter((x) => proseSpec.below_target.includes(x.page)).map((x) => `${x.page} ${x.chars}/${x.target![0]}`).join(", ")}`);
+  if (proseSpec.long_paragraphs.length)
+    warnings.push(`write: prose spec: ${proseSpec.long_paragraphs.length} paragraph(s) over ${PROSE_SPEC.paragraphMax} chars (advisory, kept)`);
+  if (proseSpec.hedge_over.length) warnings.push(`write: prose spec: hedges over ${PROSE_SPEC.hedgesPerPage}/page on ${proseSpec.hedge_over.join(", ")} (advisory, kept)`);
 
   // 5) finalize spoiler / epistemic and write the internal page files
   const now = ctx.now().toISOString();
@@ -594,7 +712,7 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
     dropped_no_basis: droppedNoBasis,
     based_on_filtered: basedOnFiltered,
     guard: { sources_checked: src.checked, sources_missing: src.missing, threshold: VERBATIM_THRESHOLD, records },
-    card_spec: cardSpec,
+    prose_spec: proseSpec,
     warnings,
   };
   outputs.push(writeJson(ctx.workDir, GEN_FILES.writeReport, report));
@@ -625,9 +743,12 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
       guard_dropped_sentences: records.reduce((n, r) => n + r.dropped_sentences.length, 0),
       guard_dropped_units: records.filter((r) => r.dropped_unit).length,
       advisory: advisory.length,
-      overview_blocks: cardSpec.overview_blocks,
-      card_spec_over_limit: cardSpec.over_limit.length,
-      card_spec_paragraph_count: cardSpec.paragraph_count.length,
+      overview_blocks: finalUnits.filter((u) => u.slot === "overview").length,
+      essay_blocks: finalUnits.filter((u) => u.slot === "intro").length,
+      prose_chars: proseSpec.prose_chars,
+      prose_below_target: proseSpec.below_target.length,
+      prose_long_paragraphs: proseSpec.long_paragraphs.length,
+      prose_hedge_over: proseSpec.hedge_over.length,
     },
     warnings,
   };

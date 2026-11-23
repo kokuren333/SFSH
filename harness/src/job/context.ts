@@ -20,7 +20,15 @@ export interface StageContext {
   now: () => Date;
   /** Append one line to logs/jobs/<job_id>.log (human-readable progress). */
   log: (msg: string) => void;
+  /**
+   * S3 write parts to run (AMENDMENT 11): "pages" = overview / figure notes / essays / quiz, "synopsis" = the long
+   * spoiler synopsis. Absent = both (full jobs). `sfsh regen --parts synopsis` writes the synopsis only.
+   */
+  writeParts?: readonly WritePartName[];
 }
+
+export const WRITE_PART_NAMES = ["pages", "synopsis"] as const;
+export type WritePartName = (typeof WRITE_PART_NAMES)[number];
 
 /** Result every stage returns to the runner. Stages never throw for "information shortage" (P-1). */
 export interface StageResult {

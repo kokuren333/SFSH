@@ -13,7 +13,9 @@ type Spec =
   | { literal: string }
   | { array: Spec }
   | { object: Record<string, Spec> }
-  | { nullable: Spec };
+  | { nullable: Spec }
+  /** Key may be absent (only meaningful as an object member). */
+  | { optional: Spec };
 
 const S = "string" as const;
 const N = "number" as const;
@@ -22,6 +24,7 @@ const nul = (s: Spec): Spec => ({ nullable: s });
 const arr = (s: Spec): Spec => ({ array: s });
 const obj = (o: Record<string, Spec>): Spec => ({ object: o });
 const en = (...v: string[]): Spec => ({ enum: v });
+const opt = (s: Spec): Spec => ({ optional: s });
 
 const EPISTEMIC = en("canon", "consensus", "fan_theory", "sfsh_analysis");
 const GRADE = en("A", "B", "C", "D");
@@ -114,6 +117,7 @@ export const PUBLIC_WORK_SPEC: Spec = obj({
     quiz: arr(
       obj({ id: S, quiz_type: en("causal", "motive", "counterfactual"), question: S, answer: S, explanation: S, based_on: arr(S), spoiler: SPOILER }),
     ),
+    synopsis: opt(obj({ intro: arr(TEXT_BLOCK), chapters: arr(obj({ id: S, heading: S, blocks: arr(TEXT_BLOCK) })) })),
   }),
   elements: obj({
     events: arr(
@@ -177,6 +181,7 @@ function check(v: unknown, spec: Spec, at: string, out: string[]): void {
     if (typeof v !== "string" || !spec.enum.includes(v)) out.push(`${at}: expected one of ${spec.enum.join("|")}, got ${JSON.stringify(v)}`);
     return;
   }
+  if ("optional" in spec) return check(v, spec.optional, at, out);
   if ("nullable" in spec) {
     if (v === null) return;
     return check(v, spec.nullable, at, out);
@@ -195,7 +200,11 @@ function check(v: unknown, spec: Spec, at: string, out: string[]): void {
   }
   const o = v as Record<string, unknown>;
   for (const k of Object.keys(spec.object)) {
-    if (!(k in o)) out.push(`${at}.${k}: missing`);
+    const member = spec.object[k]!;
+    if (!(k in o)) {
+      if (typeof member === "object" && "optional" in member) continue;
+      out.push(`${at}.${k}: missing`);
+    }
     else check(o[k], spec.object[k], `${at}.${k}`, out);
   }
   for (const k of Object.keys(o)) if (!(k in spec.object)) out.push(`${at}.${k}: extra key`);

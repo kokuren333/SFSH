@@ -130,39 +130,59 @@ ${lastRoundNote(o.round, o.maxRounds)}`;
 
 // ------------------------------------------------------------------ page text
 /**
- * Card layout limits (AMENDMENT 09). The site renders every TextBlock as a card: heading = card title,
- * paragraphs[0] = lede (shown large), the rest = body. Counted in characters (code points). Advisory only:
- * write.ts records overruns in write_report.json and never drops or truncates text (AMENDMENT 06).
+ * Writing spec v2 (AMENDMENT 10-3, BRIEF §14; REQUIREMENTS §3.2 S3 / §6.4). The AMENDMENT 09 card limits
+ * (paragraph ≤ 120, block ≤ 300) cut the text into database-like fragments; v2 writes the body pages as
+ * continuous prose with a point of view. Cards and chips stay for entrances and navigation only (site side).
+ * Every TextBlock is one section = optional subheading + several ordinary paragraphs. Counted in characters
+ * (code points). Targets only: write.ts records the measured volume in write_report.json (`prose_spec`) and
+ * never drops or truncates text (AMENDMENT 06).
  */
-export const CARD_LIMITS = {
-  heading: 14,
-  lede: 60,
-  paragraph: 120,
-  overviewBlock: 300,
-  overviewBlocks: 3,
-  quizQuestion: 60,
-  quizAnswer: 60,
-  quizExplanation: 120,
+export const PROSE_SPEC = {
+  /** Core essay pages (themes / context / interpretations): sections per page and characters per page. */
+  essaySections: [3, 5],
+  essayChars: [1200, 2500],
+  /** Work-page overview: sections and characters in total. */
+  overviewSections: [3, 4],
+  overviewChars: [800, 1500],
+  /** Figure reading note per figure page. */
+  figureNoteChars: [400, 900],
+  /** Paragraph: ordinary length; above `paragraphMax` it is split for phone reading. */
+  paragraphChars: [80, 250],
+  paragraphMax: 300,
+  /** Subheading length. */
+  heading: 20,
+  /** Mechanical hedges (「〜と読める」 etc.): at most this many per page. */
+  hedgesPerPage: 2,
+  quizQuestion: 80,
+  quizAnswer: 100,
+  quizExplanation: 220,
 } as const;
+/** Max sections kept per page (tolerant above the target; the excess is recorded, not dropped). */
+export const MAX_ESSAY_SECTIONS = 6;
+export const MAX_OVERVIEW_SECTIONS = 5;
+/** Hedge expressions counted by the prose check (AMENDMENT 10-3: avoid repeating them mechanically). */
+export const HEDGE_PATTERNS = ["と読める", "と読めます", "と考えられ", "かもしれ", "ように見え", "と言える", "といえる", "と言えます", "といえます", "と解釈でき"] as const;
 
-/** Rules carried by every S3 writing / revision / rewrite prompt (C-2, C-3, C-4, C-7, AMENDMENT 09 card layout). */
+/** Rules carried by every S3 writing / revision / rewrite prompt (C-2, C-3, C-4, C-7, writing spec v2). */
 export const WRITE_RULES = `# 執筆規則（必ず守る）
 - すべて自分の言葉で書く。出典の文を写さない（言い回しの流用も不可）。
 - 原作の文章・台詞・せりふを一切引用しない。場面の再現や描写の言い換えもしない（固有名＝作品名・人名・用語は可）。
 - 場面順のあらすじ（シーンごとの再話）にしない。人物・因果・テーマに抽象化し、分析と批評を中心にする。
-- 根拠は下に示す要素（ID 付き）だけ。各ブロックの based_on に、そのブロックが拠って立つ要素 ID を必ず1つ以上入れる。示されていない事柄や自分の記憶で補わない。
+- 根拠は下に示す要素（ID 付き）だけ。各ブロックの based_on に、そのブロックが拠って立つ要素 ID を必ず1つ以上入れる（論じた要素はすべて入れる）。示されていない事柄や自分の記憶で補わない。
 - 本文はプレーンテキストの日本語。Markdown・HTML・箇条書き記号・絵文字を使わない。
 - spoiler: そのブロックが明かす内容の最大（none＝前提のみ／mid＝中盤の展開／ending＝結末に関わる）。
 - epistemic: 作品内の確定事実だけを述べるなら canon、分析・解釈を含むなら sfsh_analysis。迷ったら sfsh_analysis。
 
-# 書き方（カード表示に合わせる）
-- 各ブロックは1枚のカードとして表示される。heading がカードの見出し、paragraphs の1つ目がリード（大きく表示される）、2つ目以降が本文になる。
-- 見出し（heading）は全角${CARD_LIMITS.heading}字以内。体言止めや問いの形でよい。
-- リード（paragraphs の1つ目）は、そのカードの要点を1文で書く（全角${CARD_LIMITS.lede}字以内）。
-- 本文の段落（paragraphs の2つ目以降）は1段落につき全角${CARD_LIMITS.paragraph}字以内。
-- 短い文で書く。1文に1つの論点だけを入れる。
+# 書き方（執筆仕様 v2：読み物としての散文）
+- 本文は連続した散文で書く。1ブロックは「小見出し（heading）＋数段落（paragraphs）」の一節として、そのまま続けて表示される。カードの見出しや要約の一文ではない。
+- 1段落は2〜5文、目安${PROSE_SPEC.paragraphChars[0]}〜${PROSE_SPEC.paragraphChars[1]}字。スマートフォンで読みやすいよう、${PROSE_SPEC.paragraphMax}字を超えそうな段落は二つに分ける。一文だけの段落や、短文を並べただけの段落にしない。
+- 段落と段落、節と節を論理でつなぐ。前の段落の結論を受けて次の問いへ進む流れにし、要素を一つずつ言い換えて並べるだけの書き方をしない。
+- 視点を持って書く。何がこの作品を面白くしているのか、なぜそう組み立てられているのか、どこに強さと弱さがあるのかを、根拠要素に基づいて論じる。
+- 機械的なヘッジを繰り返さない。「〜と読める」「〜と考えられる」「〜かもしれない」「〜といえる」のような言い回しは1ページに${PROSE_SPEC.hedgesPerPage}回までにし、表現に変化をつける。分析の文は epistemic=sfsh_analysis で区分されるので、根拠から筋が通る範囲では言い切ってよい。
+- 事実と解釈を文の上でも分ける。作品内で確定している事柄（canon の要素）は事実として述べ、そこから先の読みは、解釈であることが文脈からわかる形で書く（例: 「ここから見えてくるのは」「この配置が示しているのは」）。一般的な評価やファンの考察を、要素に無いのに持ち出さない。
+- 小見出し（heading）は全角${PROSE_SPEC.heading}字以内。その節の論点が伝わる言葉にする。
 - 専門用語は避けるか、短く言い換える。
-- です・ます調で簡潔に書く。読者に話しかける言い回し（呼びかけや「〜してみましょう」など）は使わない。`;
+- です・ます調で書く。読者に話しかける言い回し（呼びかけや「〜してみましょう」など）は使わない。`;
 
 const BLOCK_PROPS = {
   heading: { type: ["string", "null"] },
@@ -274,33 +294,65 @@ export interface WritePromptInput {
   /** Compact JSON of the public projection (public elements only). */
   elements: string;
   figures: { relations: boolean; reverse_plot: boolean; matrix: boolean };
+  /** Core essay pages to write (schema key `intros` kept for compatibility: in v2 these are the page bodies). */
   intros: { themes: boolean; context: boolean; interpretations: boolean };
+  /** Whether the work has interpretation items (otherwise the interpretations essay works from structural ambiguity). */
+  hasInterpretationItems?: boolean;
+  /**
+   * Which part this call writes (the S3 write runs one call per part in parallel to keep each call short):
+   * "frame" = overview + figure_notes + quiz; a page name = that essay page only. Absent = everything.
+   */
+  part?: WritePart;
   quiz: { id: string; quiz_type: string; question: string; answer: string; explanation: string; based_on: string[] }[];
 }
+
+const span = (x: readonly [number, number]) => `${x[0]}〜${x[1]}`;
+export type WritePart = "frame" | "themes" | "context" | "interpretations";
 
 export function writePrompt(o: WritePromptInput): string {
   const figs = (Object.keys(o.figures) as (keyof WritePromptInput["figures"])[]).filter((k) => o.figures[k]);
   const intros = (Object.keys(o.intros) as (keyof WritePromptInput["intros"])[]).filter((k) => o.intros[k]);
-  return `あなたは物語分析サイトの執筆者です。作品『${o.title}』の作品ページの本文を書いてください。読者は作品の構造と面白さを理解したい人です。
+  const interp =
+    o.hasInterpretationItems === false
+      ? "この作品には解釈の分岐（interpretations）の要素がない。その場合は、人物の動機・変容・因果・結末の要素のうち、作品が答えを一つに決めていない点（analysis に表れている曖昧さ）を取り上げ、複数の読みが成り立つ理由を独自分析として論じる。批評家やファンがそう言っている、とは書かない。"
+      : "interpretations の各論点について、それぞれの読みを支える要素と、読みを分ける作品側の仕掛けを論じる。どの読みが優勢かを断定せず、読みの違いが作品の見え方をどう変えるかを書く。";
+  const want = (k: "overview" | "figure_notes" | "intros" | "quiz") =>
+    !o.part || (o.part === "frame" ? k !== "intros" : k === "intros");
+  const pages = o.part && o.part !== "frame" ? intros.filter((k) => k === o.part) : intros;
+  const items: string[] = [];
+  const skip = (["overview", "figure_notes", "intros", "quiz"] as const).filter((k) => !want(k));
+  if (want("overview")) items.push(`overview（作品ページの概要）: ${span(PROSE_SPEC.overviewSections)}節（ブロック）、合計 全角${span(PROSE_SPEC.overviewChars)}字。各節は小見出し＋2〜4段落。次の役割を順に担う。
+   (1) この作品は何か、どこに引力があるか
+   (2) 人物と因果の水準で何が起きるか（場面順に追わず、欲望・選択・帰結の構造として）
+   (3) なぜこの作品が効いているのか（構造上の工夫・テーマ）
+   (4) 必要なら、受け止められ方や文脈がこの作品の見え方をどう変えるか
+   因果は events（caused_by／leads_to）、人物の欲望と変化は motives・arcs、世界の決まりは world_rules を根拠に使い、based_on にその ID を入れる。`);
+  if (want("figure_notes")) items.push(`figure_notes（図のページの本文）: 図ごとに1ブロック、全角${span(PROSE_SPEC.figureNoteChars)}字、2〜4段落。小見出しを付ける。図の操作説明ではなく、この作品でその図が何を明らかにするか（どこに注目すると構造が見えるか、図が示す緊張や転換は何か）を論じる。書く図: ${figs.join(", ") || "なし（空配列にする）"}。図の意味: relations＝人物関係図（フェーズで関係が変わる）／reverse_plot＝結末から原因へさかのぼる木／matrix＝誰がどの秘密をいつ知っているか（読者の列を含む）。`);
+  if (want("intros")) {
+    const desc: Record<string, string> = {
+      themes: "themes（テーマ・批評）: 作品が投げかける中心の問い、その問いが人物の動機・変容・出来事を通してどう劇として形になるか、価値観の対立、作品の強さと限界（批評）。themes の要素が無い場合は、motives・arcs・events・emotion_beats から作品の問いを組み立てる（独自分析として書く）。",
+      context: "context（文化的文脈）: なぜ有名なのか、どう受け止められてきたか、ジャンルの約束事との関係、象徴的な場面がなぜ記憶されるのか（場面を再現せず、効き方を説明する）。根拠は context と iconic の要素だけにし、要素に無い受賞歴・売上・評判を足さない。",
+      interpretations: `interpretations（解釈の分岐）: ${interp}`,
+    };
+    items.push(`intros（核心ページの本文。v2 ではページの導入ではなく本文そのもの）: ページごとに${span(PROSE_SPEC.essaySections)}節（ブロック）、1ページ合計 全角${span(PROSE_SPEC.essayChars)}字。各節は小見出し＋2〜4段落。同じページの節は page に同じ値を入れ、読む順に並べる。書くページ: ${pages.join(", ") || "なし（空配列にする）"}。
+${pages.map((k) => `   - ${desc[k]}`).join("\n")}`);
+  }
+  if (want("quiz")) items.push(`quiz: 下の各クイズ項目（quiz_id）について、問題・答え・解説を読者向けに整えて書き直す。因果・動機・反実仮想を問う形にし、固有名や数字を当てさせる暗記問題にしない。問題は全角${PROSE_SPEC.quizQuestion}字以内。答えは1〜2文で全角${PROSE_SPEC.quizAnswer}字以内。解説は答えがなぜ導けるかを2〜3文で（全角${PROSE_SPEC.quizExplanation}字以内）。新しい quiz_id を作らない。`);
+  const quizList = want("quiz")
+    ? `
+
+# クイズ項目（下書き）
+${o.quiz.map((q) => `- ${q.id} [${q.quiz_type}] 問: ${q.question} / 答: ${q.answer} / 解説: ${q.explanation} / 根拠: ${q.based_on.join(", ") || "なし"}`).join("\n") || "（なし。quiz は空配列）"}`
+    : "";
+  return `あなたは物語分析サイトの執筆者です。作品『${o.title}』のページ本文を、読み応えのある読み物として書いてください。読者は作品の構造と面白さを深く理解したい人です。
 
 ${WRITE_RULES}
 
 # 書くもの
-1. overview: ちょうど${CARD_LIMITS.overviewBlocks}ブロック。次の順に、次の役割で書く。
-   (1) この作品は何か
-   (2) 人物と因果の水準で何が起きるか（場面順に追わない）
-   (3) なぜこの作品が効いているのか（構造上の工夫・テーマ）
-   各ブロックの形: heading＝短い見出し（全角${CARD_LIMITS.heading}字以内、体言止めや問いでよい）。paragraphs の1つ目＝その節の要点を1文で（全角${CARD_LIMITS.lede}字以内）。続けて1〜2段落（各全角${CARD_LIMITS.paragraph}字以内）。1ブロックの合計は全角${CARD_LIMITS.overviewBlock}字以内。
-   因果は events（caused_by／leads_to）、人物の欲望と変化は motives・arcs、世界の決まりは world_rules を根拠に使い、based_on にその ID を入れてよい。
-2. figure_notes: 図ごとに1ブロック。heading は null か全角${CARD_LIMITS.heading}字以内。paragraphs の1つ目＝この図でまず見る点を1文で（全角${CARD_LIMITS.lede}字以内）。必要なら段落をもう1つだけ足す（全角${CARD_LIMITS.paragraph}字以内）。図そのものの説明書ではなく、この作品でその図をどう読むとよいかを書く。書く図: ${figs.join(", ") || "なし（空配列にする）"}。図の意味: relations＝人物関係図（フェーズで関係が変わる）／reverse_plot＝結末から原因へさかのぼる木／matrix＝誰がどの秘密をいつ知っているか（読者の列を含む）。
-3. intros: ページごとに1ブロック。ページの導入。heading は null か全角${CARD_LIMITS.heading}字以内。paragraphs の1つ目＝そのページで何がわかるかを1文で（全角${CARD_LIMITS.lede}字以内）。必要なら段落をもう1つだけ足す（全角${CARD_LIMITS.paragraph}字以内）。書くページ: ${intros.join(", ") || "なし（空配列にする）"}。themes＝テーマ・批評／context＝文化的文脈／interpretations＝解釈の分岐。
-4. quiz: 下の各クイズ項目（quiz_id）について、問題・答え・解説を読者向けに整えて書き直す。因果・動機・反実仮想を問う形にし、固有名や数字を当てさせる暗記問題にしない。問題は全角${CARD_LIMITS.quizQuestion}字以内。答えは1文で全角${CARD_LIMITS.quizAnswer}字以内。解説は答えがなぜ導けるかを1〜2文で（全角${CARD_LIMITS.quizExplanation}字以内）。新しい quiz_id を作らない。
+${items.map((t, i) => `${i + 1}. ${t}`).join("\n")}${skip.length ? `\n（このリクエストでは上の項目だけを書く。${skip.join("・")} は空配列にする。）` : ""}
 
 # 要素（公開対象。ID で参照する）
-${o.elements}
-
-# クイズ項目（下書き）
-${o.quiz.map((q) => `- ${q.id} [${q.quiz_type}] 問: ${q.question} / 答: ${q.answer} / 解説: ${q.explanation} / 根拠: ${q.based_on.join(", ") || "なし"}`).join("\n") || "（なし。quiz は空配列）"}
+${o.elements}${quizList}
 `;
 }
 
@@ -342,7 +394,7 @@ export function writeRevisePrompt(o: { title: string; units: ReviewUnitView[]; f
   return `作品『${o.title}』の作品ページ本文にレビューの指摘が付きました。各指摘に revised（直した）か declined（直さない。理由）で答えてください。
 
 - 直したブロックは updated に全項目を入れる（文章ブロックは paragraphs と heading、question/answer/explanation は null。クイズは question/answer/explanation を入れ、paragraphs は空配列、heading は null）。
-- 直すときもカードの形を保つ（paragraphs の1つ目はリード1文・全角${CARD_LIMITS.lede}字以内、続く段落は各全角${CARD_LIMITS.paragraph}字以内、見出しは全角${CARD_LIMITS.heading}字以内。クイズは問題・答え各全角${CARD_LIMITS.quizQuestion}字以内、解説1〜2文・全角${CARD_LIMITS.quizExplanation}字以内）。
+- 直すときも散文の形を保つ（小見出し＋通常の長さの段落。段落は目安 全角${PROSE_SPEC.paragraphChars[0]}〜${PROSE_SPEC.paragraphChars[1]}字、${PROSE_SPEC.paragraphMax}字を超えるなら分ける）。指摘された箇所だけを直し、指摘の無い段落は書き換えない。クイズは問題 全角${PROSE_SPEC.quizQuestion}字以内・答え${PROSE_SPEC.quizAnswer}字以内・解説2〜3文${PROSE_SPEC.quizExplanation}字以内。
 - 根拠の無い記述は削るか、根拠要素から言える範囲に弱める。ブロックごと不要なら removed_ids に ID を入れる。
 - 新しいブロック ID を作らない。
 
@@ -365,7 +417,7 @@ export function rewritePrompt(o: { title: string; units: { id: string; text: str
 - 一致した文は語順・語彙を変えて完全に言い換える。出典の言い回しを残さない。原作の台詞や文章も引用しない。
 - 書き直したブロックごとに units に入れる。文章ブロックは paragraphs に全段落を入れ、question/answer/explanation は null。クイズは question/answer/explanation を入れ、paragraphs は空配列。
 - 内容を増やさない。根拠の無いことを足さない。
-- 段落の数と役割を保つ（paragraphs の1つ目はリード1文・全角${CARD_LIMITS.lede}字以内、続く段落は各全角${CARD_LIMITS.paragraph}字以内）。
+- 段落の数と長さを保つ（散文のまま。要約して短くしない）。
 
 ${WRITE_RULES}
 

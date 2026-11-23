@@ -3,7 +3,7 @@
  * after the ChatGPT / Apps SDK UI guidelines: one card per unit (person, cause, secret), short labels,
  * progressive disclosure (`<details>` for deeper levels and "さらに表示"), no horizontal scrolling and no
  * scaled-down drawing at any width. These are the primary presentation on every width; the SVG / table
- * figures stay available behind "図で見る" on wider screens (figure-adapter.ts).
+ * figures come first on every width since A10 (図のルール); these cards follow them as the supplement (figure-adapter.ts).
  *
  * Pure build-time renderers like the rest of the module: public viz data → escaped markup (html``), no fs,
  * no network, deterministic (stable sort by data fields and ids).

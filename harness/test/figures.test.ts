@@ -10,7 +10,7 @@ import type { PlotNode, PublicPhase, VizMatrix, VizRelations, VizReversePlot, Vi
 import { renderMatrix, renderRelations, renderReversePlot, renderTimeline } from "../../site/src/figures/index.ts";
 import { type Box, boxesOverlap, inside, lcg, textWidth, widthClasses } from "../../site/src/figures/common.ts";
 import { EDGE_LABEL_MAX, nodeGeom, nodeLabelBox } from "../../site/src/figures/relations.ts";
-import { DEFAULT_COLUMNS } from "../../site/src/figures/matrix.ts";
+import { DEFAULT_COLUMNS, NARROW_COLUMNS } from "../../site/src/figures/matrix.ts";
 
 const root = new URL("../../", import.meta.url);
 const tokens: DesignTokens = JSON.parse(readFileSync(new URL("site/src/design/tokens.json", root), "utf8"));
@@ -34,10 +34,17 @@ function shuffle<T>(xs: T[], seed: number): T[] {
 
 const unesc = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 
-const A = () => renderRelations(fx.viz.relations, ctx)!.__raw;
-const B = () => renderReversePlot(fx.viz.reverse_plot, ctx)!.__raw;
-const C = () => renderMatrix(fx.viz.matrix, ctx)!.__raw;
-const T = () => renderTimeline(fx.viz.timeline, ctx)!.__raw;
+/**
+ * A10 (図のルール) markup: phone-width tables carry `data-label` on every body cell, and each alternative is a
+ * `<details class="fig-alt">` with a visible summary. The assertions below were written against the plain markup,
+ * so the HTML is normalized back (labels removed, fold summary mapped to the former wrapper) before matching.
+ */
+const norm = (h: string) =>
+  h.replace(/ data-label="[^"]*"/g, "").replace(/<details class="fig-alt" data-alt-for="([^"]+)"><summary class="fig-alt__summary">[^<]*<\/summary>/g, '<div class="fig-alt" data-alt-for="$1">');
+const A = () => norm(renderRelations(fx.viz.relations, ctx)!.__raw);
+const B = () => norm(renderReversePlot(fx.viz.reverse_plot, ctx)!.__raw);
+const C = () => norm(renderMatrix(fx.viz.matrix, ctx)!.__raw);
+const T = () => norm(renderTimeline(fx.viz.timeline, ctx)!.__raw);
 
 interface Svg {
   cls: string;
@@ -108,27 +115,28 @@ test("determinism: shuffled input order → identical output (A characters/relat
     const r = clone(fx.viz.relations);
     r.characters = shuffle(r.characters, seed);
     r.relations = shuffle(r.relations, seed + 1);
-    assert.equal(renderRelations(r, { ...ctx, phases: shuffle(fx.phases, seed) })!.__raw, A());
+    assert.equal(norm(renderRelations(r, { ...ctx, phases: shuffle(fx.phases, seed) })!.__raw), A());
     const m = clone(fx.viz.matrix);
     m.cells = shuffle(m.cells, seed);
-    assert.equal(renderMatrix(m, { ...ctx, phases: shuffle(fx.phases, seed + 2) })!.__raw, C());
+    assert.equal(norm(renderMatrix(m, { ...ctx, phases: shuffle(fx.phases, seed + 2) })!.__raw), C());
     const tl = clone(fx.viz.timeline);
     tl.events = shuffle(tl.events, seed);
-    assert.equal(renderTimeline(tl, ctx)!.__raw, T());
+    assert.equal(norm(renderTimeline(tl, ctx)!.__raw), T());
   }
 });
 
 test("every figure is followed immediately by its alternative table/list", () => {
-  for (const [name, html, n] of [
-    ["A", A(), 1],
-    ["B", B(), fx.viz.reverse_plot.trees.length],
-    ["C", C(), 1],
-    ["T", T(), 1],
+  // C has two figures since A10: the phone-width per-secret matrix and the full table (the alternative follows the full table)
+  for (const [name, html, n, figN] of [
+    ["A", A(), 1, 1],
+    ["B", B(), fx.viz.reverse_plot.trees.length, fx.viz.reverse_plot.trees.length],
+    ["C", C(), 1, 2],
+    ["T", T(), 1, 1],
   ] as const) {
     const figs = html.match(/<\/figure>/g) ?? [];
     const followed = html.match(/<\/figure><div class="fig-alt" data-alt-for="[^"]+">/g) ?? [];
-    assert.equal(figs.length, n, `${name}: figure count`);
-    assert.equal(followed.length, n, `${name}: each </figure> is followed by .fig-alt`);
+    assert.equal(figs.length, figN, `${name}: figure count`);
+    assert.equal(followed.length, n, `${name}: each full figure is followed by .fig-alt`);
     assert.match(html, /<div class="fig-alt"[^>]*>(?:<p class="fig-alt__title">[^<]*<\/p>)?(?:<div class="fig-table-wrap"><table|<details)/, `${name}: alt is a table or list`);
   }
 });
@@ -162,10 +170,10 @@ test("escaping: a label containing <b>&\" is escaped everywhere (A, B, C, timeli
   phases[0]!.label = evil;
   const c2 = { ...ctx, phases };
   for (const html of [
-    renderRelations(r, c2)!.__raw,
-    renderReversePlot(p, c2)!.__raw,
-    renderMatrix(m, c2)!.__raw,
-    renderTimeline(tl, c2)!.__raw,
+    norm(renderRelations(r, c2)!.__raw),
+    norm(renderReversePlot(p, c2)!.__raw),
+    norm(renderMatrix(m, c2)!.__raw),
+    norm(renderTimeline(tl, c2)!.__raw),
   ]) {
     assert.doesNotMatch(html, /<b>/);
     assert.doesNotMatch(html, /&"x/);
@@ -345,7 +353,7 @@ test("A: phase switch = radios (no JS) with data-pi, first checked; one per phas
   );
   assert.match(html, /^<div class="fig-block fig-a fig-phased"/);
   // a single phase needs no switch and its group is always visible
-  const one = renderRelations(fx.viz.relations, { ...ctx, phases: [fx.phases[0]!] })!.__raw;
+  const one = norm(renderRelations(fx.viz.relations, { ...ctx, phases: [fx.phases[0]!] })!.__raw);
   assert.doesNotMatch(one, /fig-phase-radio/);
   assert.match(one, /<g class="fig-ph fig-ph--always" data-phase="ph1" data-pi="1">/);
 });
@@ -397,7 +405,7 @@ test("A: 30 characters / 60 relations still lay out without node-label overlaps"
     };
   });
   const t0 = performance.now();
-  const html = renderRelations({ characters: chars, relations, factions: [] }, ctx)!.__raw;
+  const html = norm(renderRelations({ characters: chars, relations, factions: [] }, ctx)!.__raw);
   const ms = performance.now() - t0;
   const g = nodeGeom(tokens);
   for (const s of svgs(html, "fig-a__svg")) {
@@ -500,7 +508,7 @@ test("B: wide tree (2 outcomes × 6 direct × 3 factors, long labels) → left�
     node(`o${o}d${d}f${k}`, "factor", `${long}${k}`, k === 0 ? [node(`o${o}d${d}f${k}r`, "root", `根本${long}`, [])] : []);
   const direct = (o: number, d: number) => node(`o${o}d${d}`, "direct", `直接原因${d}${long}`, [0, 1, 2].map((k) => factor(o, d, k)));
   const trees = [0, 1].map((o) => node(`o${o}`, "outcome", `結末${o}：${long}`, [0, 1, 2, 3, 4, 5].map((d) => direct(o, d))));
-  const html = renderReversePlot({ trees }, ctx)!.__raw;
+  const html = norm(renderReversePlot({ trees }, ctx)!.__raw);
   assert.doesNotMatch(html, /fig-b__nofit/);
   const figs = html.split('<figure class="fig-figure fig-b__fig"').slice(1);
   assert.equal(figs.length, 2);
@@ -515,7 +523,7 @@ test("B: wide tree (2 outcomes × 6 direct × 3 factors, long labels) → left�
     }
   }
   checkTreeSvgs(html);
-  assert.equal(renderReversePlot({ trees }, ctx)!.__raw, html, "deterministic");
+  assert.equal(norm(renderReversePlot({ trees }, ctx)!.__raw), html, "deterministic");
 });
 
 test("B: alternative table lists every node of every level", () => {
@@ -531,7 +539,15 @@ test("B: alternative table lists every node of every level", () => {
 
 test("C: reader column distinguished and first; one column per holder; marks + labels; missing = 情報なし", () => {
   const html = C();
-  const head = html.match(/<thead>([\s\S]*?)<\/thead>/)![1]!;
+  const head = html.match(/<table class="fig-c__table"><thead>([\s\S]*?)<\/thead>/)![1]!;
+  // A10 phone form: one small matrix per secret (rows = phases), reader first, at most NARROW_COLUMNS columns per table
+  const minis = [...html.matchAll(/<table class="fig-c__mini" data-secret="([^"]+)">([\s\S]*?)<\/table>/g)];
+  assert.equal(minis.length, fx.viz.matrix.secrets.length * Math.ceil(fx.viz.matrix.holders.length / NARROW_COLUMNS));
+  assert.match(minis[0]![2]!, /<thead><tr><th scope="col" class="fig-c__mini-phase">時期<\/th><th scope="col" class="fig-c__aud">読者<\/th>/);
+  for (const m of minis) {
+    assert.ok((m[2]!.match(/<th scope="col"/g) ?? []).length <= NARROW_COLUMNS + 1);
+    assert.equal((m[2]!.match(/<th scope="row" class="fig-c__mini-phase">/g) ?? []).length, fx.phases.length);
+  }
   const cols = [...head.matchAll(/<th scope="col"(?: class="([^"]*)")? data-holder="([^"]+)">([^<]*)<\/th>/g)];
   assert.equal(cols.length, fx.viz.matrix.holders.length);
   assert.equal(cols[0]![2], "audience");
@@ -649,7 +665,7 @@ test("A: character table shows faction labels from viz.factions (no placeholder 
   assert.doesNotMatch(html, /グループ[A-Z]/);
   const v = clone(fx.viz.relations);
   v.factions = [{ id: "f_harbor", label: "<港>&組合" }];
-  const out = renderRelations(v, ctx)!.__raw;
+  const out = norm(renderRelations(v, ctx)!.__raw);
   assert.ok(out.includes("<td>&lt;港&gt;&amp;組合</td>"), "faction label escaped");
   assert.ok(out.includes("<td>所属あり（名称未掲載）</td>"), "unlabelled faction marked");
 });
@@ -666,7 +682,7 @@ test("B: analysis shown under the summary inside the list details and in the tab
   const p = clone(fx.viz.reverse_plot);
   const leaf = p.trees[0]!.children[2]!; // d3: no summary, no children
   leaf.analysis = '<script>x</script>"';
-  const out = renderReversePlot(p, ctx)!.__raw;
+  const out = norm(renderReversePlot(p, ctx)!.__raw);
   assert.ok(out.includes(`<li class="fig-b__item" data-depth="1"><details open><summary><span class="fig-b__name">${leaf.label}</span>`), "a leaf with analysis becomes expandable");
   assert.ok(out.includes("&lt;script&gt;x&lt;/script&gt;&quot;"));
   assert.doesNotMatch(out, /<script>x/);

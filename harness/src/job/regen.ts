@@ -21,7 +21,7 @@ import { withDirLock } from "../publish/lock.ts";
 import { pidAlive } from "../queue/lock.ts";
 import type { BudgetState, Fetcher } from "../research/types.ts";
 import { STAGING_PREFIX, readWork, rebuildIndex } from "../works/store.ts";
-import type { StageContext, StageResult } from "./context.ts";
+import { WRITE_PART_NAMES, type StageContext, type StageResult, type WritePartName } from "./context.ts";
 import { MAX_ATTEMPTS, OFFLINE_STAGES, offlineStage, type OfflineStageName } from "./runner.ts";
 
 export { OFFLINE_STAGES as REGEN_STAGES };
@@ -32,6 +32,7 @@ export const REGEN_BACKUP_ITEMS = [
   "gen/pages",
   "gen/public.json",
   "gen/write_report.json",
+  "gen/synopsis_report.json",
   "gen/reviews",
   "gen/gen_check.json",
   "check",
@@ -61,6 +62,18 @@ export interface RegenDeps {
 
 export interface RegenOptions {
   stages?: readonly string[];
+  /** AMENDMENT 11: S3 write parts (pages, synopsis). Absent = both. */
+  parts?: readonly string[];
+}
+
+/** Parse / validate the --parts list for the write stage. */
+export function parseWriteParts(list: readonly string[] | undefined): WritePartName[] | undefined {
+  if (!list) return undefined;
+  const want = list.map((s) => s.trim()).filter(Boolean);
+  const bad = want.filter((s) => !(WRITE_PART_NAMES as readonly string[]).includes(s));
+  if (bad.length) throw new RegenRefused(`unknown part(s) for regen: ${bad.join(", ")} (allowed: ${WRITE_PART_NAMES.join(", ")})`);
+  if (!want.length) throw new RegenRefused("--parts is empty");
+  return WRITE_PART_NAMES.filter((s) => want.includes(s));
 }
 
 export interface RegenStageRecord {
@@ -92,6 +105,8 @@ export interface RegenRecord {
   duration_ms: number;
   ok: boolean;
   stages_requested: RegenStageName[];
+  /** AMENDMENT 11: write parts requested (absent = pages and synopsis). */
+  parts_requested?: WritePartName[];
   stages: RegenStageRecord[];
   /** Relative to the work dir. */
   backup_dir: string;
@@ -228,6 +243,7 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slic
 export async function runRegen(workId: string, opts: RegenOptions, deps: RegenDeps): Promise<RegenRecord> {
   const now = deps.now ?? (() => new Date());
   const stages = parseRegenStages(opts.stages);
+  const parts = parseWriteParts(opts.parts);
   regenPreflight(deps.worksDir, deps.jobsDir, workId);
   fs.mkdirSync(deps.logDir, { recursive: true });
   return tryWorkLock(path.join(deps.logDir, `${workId}.lock`), workId, async () => {
@@ -240,7 +256,7 @@ export async function runRegen(workId: string, opts: RegenOptions, deps: RegenDe
     const logFile = path.join(deps.logDir, `${workId}.${stamp}.log`);
     const recordFile = path.join(deps.logDir, `${workId}.${stamp}.json`);
     const log = (m: string) => fs.appendFileSync(logFile, `${isoLocal(now())} ${m}\n`, "utf8");
-    log(`regen start pid=${process.pid} work=${workId} stages=${stages.join(",")} job_id=${jobId}`);
+    log(`regen start pid=${process.pid} work=${workId} stages=${stages.join(",")}${parts ? ` parts=${parts.join(",")}` : ""} job_id=${jobId}`);
 
     const backup = backupWork(workDir, stamp, { work_id: workId, job_id: jobId, created_at: isoLocal(startedAt), stages });
     log(`backup ${backup.dir}: ${backup.items.join(", ") || "(nothing to back up)"}`);
@@ -259,6 +275,7 @@ export async function runRegen(workId: string, opts: RegenOptions, deps: RegenDe
       budget,
       now,
       log,
+      ...(parts ? { writeParts: parts } : {}),
     };
     const indexLock = path.join(deps.logDir, "index.lock");
     const maxAttempts = deps.maxAttempts ?? MAX_ATTEMPTS;
@@ -334,6 +351,7 @@ export async function runRegen(workId: string, opts: RegenOptions, deps: RegenDe
       duration_ms: Date.now() - t0,
       ok: error === null,
       stages_requested: stages,
+      ...(parts ? { parts_requested: parts } : {}),
       stages: records.filter((r) => stages.includes(r.stage)),
       backup_dir: backup.dir,
       backup_items: backup.items,

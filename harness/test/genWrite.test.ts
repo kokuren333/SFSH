@@ -116,9 +116,12 @@ test("writePages: based_on filter, spoiler max, copied_phrase deletion, 30-char 
     const res = await writePages(ctx);
 
     // calls: tasks, jobId, input isolation
+    // writing spec v2: the write runs as parallel part calls (frame + one per essay page) before the review loop
+    const writes = calls.filter((c) => c.req.task === "s3.write").length;
+    assert.equal(writes, 4, "frame + themes + context + interpretations");
     assert.deepEqual(
       calls.map((c) => `${c.port}:${c.req.task}`),
-      ["haiku:s3.write", "luna:s3.write.review", "haiku:s3.write.revise", "luna:s3.write.review", "haiku:s3.write.revise", "haiku:s3.write.rewrite"],
+      [...Array(writes).fill("haiku:s3.write"), "luna:s3.write.review", "haiku:s3.write.revise", "luna:s3.write.review", "haiku:s3.write.revise", "haiku:s3.write.rewrite"],
     );
     for (const c of calls) assert.equal(c.req.jobId, "job-gen-test");
     const writeReq = calls[0].req.prompt;
@@ -126,7 +129,7 @@ test("writePages: based_on filter, spoiler max, copied_phrase deletion, 30-char 
     for (const s of ["居場所を守りたい", "掟", "不安の高まり", "崩壊の読み解き。"]) assert.ok(writeReq.includes(s), `CP-026 public element missing from write input: ${s}`);
     assert.match(writeReq, /台詞/);
     assert.match(writeReq, /自分の言葉/);
-    assert.ok(calls[1].req.prompt.includes("主張 c0001"), "Luna sees the claims behind the elements");
+    assert.ok(calls[writes].req.prompt.includes("主張 c0001"), "Luna sees the claims behind the elements");
 
     const overview = read(dir, "gen/pages/overview.json").blocks;
     assert.deepEqual(overview.map((b: { id: string }) => b.id), ["ov01", "ov02"], "ov03 (no public basis) dropped");

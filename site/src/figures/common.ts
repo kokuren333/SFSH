@@ -207,3 +207,32 @@ export function phaseAttrs(phases: PublicPhase[], idx: number, extraClass = ""):
   const extra = extraClass ? " " + extraClass : "";
   return `class="fig-ph${always}${extra}" data-phase="${esc(phases[idx]!.id)}" data-pi="${idx + 1}"`;
 }
+
+// ---------------------------------------------------------------- A10 (図のルール): tables and folds at phone width
+
+/**
+ * Data tables stack into labelled rows below the tablet width (BRIEF §14 図のルール, REQUIREMENTS §6.4): each
+ * body cell gets `data-label` = its column header, and the CSS (`.fig-table--stack`) shows one row per block
+ * with the header above each value at 360/390px, so no table needs horizontal scrolling on a phone. From the
+ * tablet width up the table is an ordinary table again. Input is code-generated markup only (headers are
+ * fixed strings already escaped by `esc`), so the string transform cannot see model text as markup.
+ */
+export function stackTables(s: string): string {
+  return s.replace(/<table class="fig-table">([\s\S]*?)<\/table>/g, (_m, inner: string) => {
+    const head = /<thead>([\s\S]*?)<\/thead>/.exec(inner);
+    const labels = head ? [...head[1]!.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map((m) => m[1]!.replace(/<[^>]*>/g, "")) : [];
+    const body = inner.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_b, rows: string) => {
+      const out = rows.replace(/<tr\b[^>]*>[\s\S]*?<\/tr>/g, (tr) => {
+        let i = 0;
+        return tr.replace(/<(td|th)\b/g, (cell) => `${cell} data-label="${labels[i++] ?? ""}"`);
+      });
+      return `<tbody>${out}</tbody>`;
+    });
+    return `<table class="fig-table fig-table--stack">${body}</table>`;
+  });
+}
+
+/** The alternative tables/lists of a figure, folded behind one visible entry (shown at every width). */
+export function altFold(altFor: string, summary: string, inner: string): string {
+  return `<details class="fig-alt" data-alt-for="${esc(altFor)}"><summary class="fig-alt__summary">${esc(summary)}</summary>${inner}</details>`;
+}

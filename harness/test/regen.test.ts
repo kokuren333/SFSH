@@ -10,9 +10,9 @@ import { test } from "node:test";
 import { main } from "../src/cli.ts";
 import { regenCommand } from "../src/commands/regen.ts";
 import { projectPublic } from "../src/gen/project.ts";
-import { CARD_LIMITS, WRITE_RULES, writePrompt } from "../src/gen/prompts.ts";
+import { PROSE_SPEC, WRITE_RULES, writePrompt } from "../src/gen/prompts.ts";
 import { GEN_WORK_ID, genContext, makeGenWork } from "../src/gen/testFixtures.ts";
-import { cardSpecCheck, type Unit } from "../src/gen/write.ts";
+import { proseSpecCheck, type Unit } from "../src/gen/write.ts";
 import { RegenRefused, noNetworkFetcher, offlinePort, parseRegenStages, runRegen, type ModelCallStats, type RegenDeps } from "../src/job/regen.ts";
 import type { ModelPort, ModelRequest } from "../src/model/types.ts";
 import { fakePort, type FakeCall } from "../src/nkg/testFixtures.ts";
@@ -42,11 +42,15 @@ function ports(version: { v: string }, calls: FakeCall[], opts: { failWrite?: bo
         if (opts.failWrite) throw new Error("model down");
         return writeOutput(version.v);
       }
+      // AMENDMENT 11: the write stage also writes the synopsis (1 plan + 1 chapter here)
+      if (req.task === "s3.synopsis.plan")
+        return { intro: { paragraphs: [`甲が組織を離れるまでの物語（${version.v}）です。`], based_on: ["ch01"] }, chapters: [{ heading: "離脱", phase_ids: ["ph1"], event_ids: ["ev01"], claim_ids: [], introduces: ["人物甲"], gist: "離脱まで", target_chars: 800 }] };
+      if (req.task === "s3.synopsis.chapter") return { sections: [{ heading: "発覚", paragraphs: [`裏切りが（${version.v}）発覚します。`], based_on: ["ev01"], spoiler: "mid", epistemic: "canon" }] };
       return undefined;
     },
     calls,
   );
-  const luna = fakePort("luna", (req) => (req.task === "s3.write.review" ? { findings: [] } : undefined), calls);
+  const luna = fakePort("luna", (req) => (req.task === "s3.write.review" || req.task === "s3.synopsis.review" ? { findings: [] } : undefined), calls);
   return { haiku, luna };
 }
 
@@ -84,49 +88,54 @@ async function withFetchTrap<T>(fn: () => Promise<T>): Promise<{ result: T; fetc
   }
 }
 
-test("writing prompt carries the AMENDMENT 09 card spec and keeps the existing rules", () => {
-  const p = writePrompt({ title: "作品", elements: "{}", figures: { relations: true, reverse_plot: false, matrix: false }, intros: { themes: true, context: false, interpretations: false }, quiz: [] });
+test("writing prompt carries writing spec v2 (A10: continuous prose) and keeps the existing rules", () => {
+  const p = writePrompt({ title: "作品", elements: "{}", figures: { relations: true, reverse_plot: false, matrix: false }, intros: { themes: true, context: false, interpretations: true }, hasInterpretationItems: false, quiz: [] });
   for (const s of [
-    "ちょうど3ブロック",
+    "読み応えのある読み物",
     "(1) この作品は何か",
-    "(2) 人物と因果の水準で何が起きるか（場面順に追わない）",
+    "(2) 人物と因果の水準で何が起きるか",
     "(3) なぜこの作品が効いているのか（構造上の工夫・テーマ）",
-    "全角14字以内",
-    "全角60字以内",
-    "全角120字以内",
-    "全角300字以内",
-    "この図でまず見る点を1文で",
-    "解説は答えがなぜ導けるかを1〜2文で",
-    "です・ます調で簡潔に",
-    "1文に1つの論点",
+    "全角1200〜2500字",
+    "全角800〜1500字",
+    "全角400〜900字",
+    "連続した散文",
+    "視点を持って書く",
+    "機械的なヘッジを繰り返さない",
+    "事実と解釈を文の上でも分ける",
+    "解釈の分岐（interpretations）の要素がない",
     "自分の言葉",
     "台詞",
     "場面の再現",
     "based_on",
   ])
     assert.ok(p.includes(s), `write prompt lacks: ${s}`);
-  assert.ok(WRITE_RULES.includes("paragraphs の1つ目がリード"));
-  assert.equal(CARD_LIMITS.overviewBlocks, 3);
+  for (const gone of ["リード", "全角60字以内", "全角120字以内", "全角300字以内", "1文に1つの論点"]) assert.ok(!p.includes(gone), `card rule left: ${gone}`);
+  assert.equal(PROSE_SPEC.paragraphMax, 300);
+  // part split: an essay call asks for that page only; the frame call never asks for essays
+  const ess = writePrompt({ title: "作品", elements: "{}", figures: { relations: true, reverse_plot: false, matrix: false }, intros: { themes: true, context: true, interpretations: true }, part: "context", quiz: [] });
+  assert.ok(ess.includes("書くページ: context") && !ess.includes("overview（作品ページの概要）"));
+  const frame = writePrompt({ title: "作品", elements: "{}", figures: { relations: true, reverse_plot: false, matrix: false }, intros: { themes: true, context: true, interpretations: true }, part: "frame", quiz: [] });
+  assert.ok(frame.includes("overview（作品ページの概要）") && !frame.includes("書くページ:"));
 });
 
-test("cardSpecCheck: records over-long lede / paragraph / heading / quiz fields as advisory, never edits", () => {
+test("proseSpecCheck: measures volume per page, long paragraphs and hedges as advisory, never edits", () => {
   const u = (o: Partial<Unit>): Unit => ({ id: "x", page: "overview", slot: "overview", heading: null, paragraphs: [], quiz: null, based_on: ["a"], spoiler: "none", epistemic: "sfsh_analysis", ...o });
   const long = (n: number) => "あ".repeat(n);
   const units = [
-    u({ id: "ov01", heading: long(15), paragraphs: [long(61), long(121), long(120)] }),
-    u({ id: "ov02", heading: "短い", paragraphs: [long(60)] }),
-    u({ id: "fn_matrix", page: "figure_notes", slot: "matrix", paragraphs: [long(10), long(10), long(10)] }),
-    u({ id: "qz01", page: "quiz", slot: "quiz", quiz: { quiz_type: "causal", question: long(61), answer: long(60), explanation: long(121) } }),
+    u({ id: "ov01", heading: "見出し", paragraphs: [long(301), long(100)] }),
+    u({ id: "themes_intro01", page: "themes", slot: "intro", paragraphs: [long(200) + "と読める。" + "と考えられる。" + "かもしれない。"] }),
+    u({ id: "themes_intro02", page: "themes", slot: "intro", paragraphs: [long(200)] }),
+    u({ id: "qz01", page: "quiz", slot: "quiz", quiz: { quiz_type: "causal", question: "問", answer: "答", explanation: "解" } }),
   ];
   const before = JSON.stringify(units);
-  const r = cardSpecCheck(units);
+  const r = proseSpecCheck(units);
   assert.equal(JSON.stringify(units), before, "units unchanged");
-  assert.equal(r.overview_blocks, 2);
-  assert.deepEqual(
-    r.over_limit.map((f) => `${f.id}.${f.field}`),
-    ["ov01.heading", "ov01.lede", "ov01.paragraphs[1]", "ov01.block_total", "qz01.question", "qz01.explanation"],
-  );
-  assert.deepEqual(r.paragraph_count.map((c) => c.id), ["ov02", "fn_matrix"]);
+  assert.deepEqual(r.pages.map((p) => `${p.page}:${p.sections}`), ["overview:1", "themes:2"]);
+  assert.equal(r.pages[0]!.chars, 3 + 301 + 100);
+  assert.deepEqual(r.long_paragraphs, [{ id: "ov01", index: 0, chars: 301 }]);
+  assert.deepEqual(r.below_target, ["overview", "themes"]);
+  assert.deepEqual(r.hedge_over, ["themes"]);
+  assert.equal(r.quiz_chars, 3);
 });
 
 test("regen: write → compose → autocheck from saved research, previous outputs backed up, no search / fetch", async () => {
@@ -141,28 +150,33 @@ test("regen: write → compose → autocheck from saved research, previous outpu
     assert.equal(rec.ok, true, rec.error ?? "");
     assert.equal(fetches, 0, "no HTTP request");
     assert.deepEqual(rec.stages.map((r) => `${r.stage}:${r.status}`), ["write:done", "compose:done", "autocheck:done"]);
-    assert.deepEqual(s.calls.map((c) => `${c.port}:${c.req.task}`), ["haiku:s3.write", "luna:s3.write.review"]);
+    const writes = s.calls.filter((c) => c.req.task === "s3.write").length;
+    assert.ok(writes >= 3, "v2: frame + essay pages written as parallel calls");
+    const pageCalls = s.calls.filter((c) => !c.req.task.startsWith("s3.synopsis"));
+    assert.deepEqual(pageCalls.map((c) => `${c.port}:${c.req.task}`), [...Array(writes).fill("haiku:s3.write"), "luna:s3.write.review"]);
+    assert.deepEqual(s.calls.filter((c) => c.req.task.startsWith("s3.synopsis")).map((c) => `${c.port}:${c.req.task}`), ["haiku:s3.synopsis.plan", "haiku:s3.synopsis.chapter", "luna:s3.synopsis.review"]);
     for (const c of s.calls) {
       assert.equal(c.req.jobId, rec.job_id);
       assert.equal(c.req.tools, "none");
     }
     assert.match(rec.job_id, new RegExp(`^regen-\\d{8}-\\d{9}-${GEN_WORK_ID}$`));
     assert.deepEqual(rec.network, { fetcher_calls: 0, searches_used: 0, fetches_used: 0, budget_limits: { searches: 0, fetches: 0, wallMs: 0 } });
-    assert.equal(rec.model_calls.total, 2);
-    assert.deepEqual(rec.model_calls.by_port, { haiku: { ok: 1, failed: 0 }, luna: { ok: 1, failed: 0 } });
+    assert.equal(rec.model_calls.total, writes + 1 + 3);
+    assert.deepEqual(rec.model_calls.by_port, { haiku: { ok: writes + 2, failed: 0 }, luna: { ok: 2, failed: 0 } });
 
     // new text everywhere
     const overview = read(s.dir, "gen/pages/overview.json").blocks;
     assert.equal(overview.length, 3);
-    assert.equal(overview[0].paragraphs[0], "信頼をめぐる物語です新。", "lede = first paragraph");
+    assert.equal(overview[0].paragraphs[0], "信頼をめぐる物語です新。", "first paragraph");
     const pub = fs.readFileSync(path.join(s.dir, "gen/public.json"), "utf8");
     assert.ok(pub.includes("新") && !pub.includes("物語です旧"));
     assert.equal(pub.includes("_backup"), false, "backup never reaches public.json");
     assert.equal(read(s.dir, "check/report.json").job_id, rec.job_id);
     const wr = read(s.dir, "gen/write_report.json");
-    assert.equal(wr.card_spec.overview_blocks, 3);
-    assert.deepEqual(wr.card_spec.over_limit, []);
-    assert.equal(rec.stages[0]!.metrics.card_spec_over_limit, 0);
+    assert.equal(wr.card_spec, undefined, "v2 reports carry prose_spec, not card_spec");
+    assert.ok(wr.prose_spec.pages.some((p: { page: string }) => p.page === "overview"));
+    assert.ok(wr.prose_spec.prose_chars > 0);
+    assert.equal(rec.stages[0]!.metrics.prose_chars, wr.prose_spec.prose_chars);
 
     // backup holds the previous outputs, mirroring the work dir
     const b = path.join(s.dir, rec.backup_dir);
@@ -316,7 +330,7 @@ test("CLI: regen is listed in help; missing args / unknown option → 2; real ru
   console.error = (...a: unknown[]) => void errs.push(a.join(" "));
   try {
     assert.equal(await main(["help"]), 0);
-    assert.ok(outs.join("\n").includes("regen <work_id> [--stages write,compose,autocheck] [--json]"));
+    assert.ok(outs.join("\n").includes("regen <work_id> [--stages write,compose,autocheck] [--parts pages,synopsis] [--json]"));
     assert.equal(await main(["regen"]), 2);
     assert.equal(await main(["regen", GEN_WORK_ID, "--bogus"]), 2);
     assert.equal(await main(["regen", GEN_WORK_ID]), 2);

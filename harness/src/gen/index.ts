@@ -6,6 +6,7 @@
 export { suggestTags } from "./tags.ts";
 export { projectPublic, buildProjection } from "./project.ts";
 export { writePages } from "./write.ts";
+export { writeSynopsis } from "./synopsis.ts";
 export { composePublic, composePublicWork } from "./compose.ts";
 export { checkPublicWork, forbiddenContent } from "./check.ts";
 export { GEN_FILES } from "./io.ts";

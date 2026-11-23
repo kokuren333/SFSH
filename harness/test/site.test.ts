@@ -104,7 +104,7 @@ test('markup is escaped; ending blocks are closed details; canonical title used 
   const text = await readFile(join(outA, 'works/novel-akari-2020/index.html'), 'utf8');
   assert.ok(text.includes('&lt;script&gt;alert(1)&lt;/script&gt; &quot;onload='));
   assert.doesNotMatch(text, /<script>alert|"onload=/);
-  assert.match(text, /<details class="spoiler"><summary>結末に触れる内容（クリックで表示）<\/summary><section class="text-block" id="b2">/);
+  assert.match(text, /<details class="spoiler"><summary>結末に触れる内容（クリックで表示）<\/summary><section class="text-block prose" id="b2">/);
   assert.ok(text.includes('回想の詳細な順序'));
   assert.ok(text.includes('灯路')); assert.ok(!text.includes('あかりのこおろ'));
   assert.match(text, /根拠要素の信頼度: A/);
@@ -311,7 +311,7 @@ test('CP-026: analysis on themes, context, iconic and reverse-plot list; faction
     assert.ok(plot.includes('<p class="fig-b__summary">合意が選択を支える。</p><p class="fig-b__analysis">'));
     assert.ok(plot.includes('選択の背後には、知識を独占しないという約束が読み取れる。'));
     const rel = await readFile(join(outA, 'works/novel-akari-2020/relations/index.html'), 'utf8');
-    assert.ok(rel.includes('<td>灯台の家</td>'));
+    assert.match(rel, /<td(?: data-label="[^"]*")?>灯台の家<\/td>/);
   }
   const css = await readFile(resolve(repoRoot, 'site/src/styles/base.css'), 'utf8');
   assert.match(css, /body \{[^}]*overflow-wrap: anywhere/);

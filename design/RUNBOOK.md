@@ -29,6 +29,7 @@
 | 聞き返しに答える | `status <job_id>` で候補を見て `answer <job_id> --pick <n>`（または `--work`／`--medium`／`--range`） | ジョブが `queued` に進む |
 | 取り消す | `cancel <job_id>`（バッチは `cancel --batch <batch_id>`） | `queued` 以前は即時、実行中は次の段の境目で `cancelled` |
 | 既存作品の文章だけ作り直す（再調査なし） | `regen <work_id>` → `publish` | 執筆・組版・自動確認だけを保存済みの調査から再実行する（検索・取得 0）。前の状態は `works/<id>/gen/_backup-<時刻>/`。worker と同時に動かさない |
+| あらすじ（全編・ネタバレ）だけ作り直す（A11） | `regen <work_id> --parts synopsis` → `publish` | 既存ページの本文は変えずにあらすじだけを書き直す（検索・取得 0）。字数・章・文体の実測は `works/<id>/gen/synopsis_report.json`。`--parts pages` は既存ページだけ |
 
 ### 2.2 確認
 

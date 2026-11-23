@@ -3,10 +3,11 @@ import { REGEN_STAGES, RegenRefused, runRegen, type RegenDeps, type RegenRecord,
 import { getModelPort } from "../model/index.ts";
 import { paths } from "../paths.ts";
 
-export const REGEN_USAGE = `regen <work_id> [--stages ${REGEN_STAGES.join(",")}] [--json]`;
+export const REGEN_USAGE = `regen <work_id> [--stages ${REGEN_STAGES.join(",")}] [--parts pages,synopsis] [--json]`;
 
 /**
- * `sfsh regen <work_id> [--stages write,compose,autocheck] [--json]` (AMENDMENT 09).
+ * `sfsh regen <work_id> [--stages write,compose,autocheck] [--parts pages,synopsis] [--json]` (AMENDMENT 09; --parts AMENDMENT 11:
+ * the write stage writes the page text and/or the long synopsis — absent = both).
  * Re-runs S3 write → compose → S4 autocheck for an existing work from saved research only (no search / fetch).
  * Exit: 0 ok / 2 usage or refused (nothing changed) / 3 a stage failed (backup kept under gen/_backup-<stamp>/).
  * `deps` is injected by tests; without it the real model ports, works/ and logs/regen/ are used.
@@ -14,12 +15,15 @@ export const REGEN_USAGE = `regen <work_id> [--stages ${REGEN_STAGES.join(",")}]
 export async function regenCommand(args: string[], deps?: RegenDeps): Promise<number> {
   let workId: string | null = null;
   let stages: string[] | undefined;
+  let parts: string[] | undefined;
   let json = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--json") json = true;
     else if (a === "--stages" && args[i + 1] !== undefined) stages = args[++i]!.split(",");
     else if (a.startsWith("--stages=")) stages = a.slice("--stages=".length).split(",");
+    else if (a === "--parts" && args[i + 1] !== undefined) parts = args[++i]!.split(",");
+    else if (a.startsWith("--parts=")) parts = a.slice("--parts=".length).split(",");
     else if (!a.startsWith("-") && workId === null) workId = a;
     else {
       console.error(`unknown option: ${a}\nusage: sfsh ${REGEN_USAGE}`);
@@ -51,7 +55,7 @@ export async function regenCommand(args: string[], deps?: RegenDeps): Promise<nu
   };
   let rec: RegenRecord;
   try {
-    rec = await runRegen(workId, { stages }, d);
+    rec = await runRegen(workId, { stages, parts }, d);
   } catch (e) {
     if (e instanceof RegenRefused) {
       console.error(`sfsh regen: ${e.message}`);

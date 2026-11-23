@@ -562,3 +562,205 @@
     transition: none;
   }
 }
+
+/* ---------- A10 図のルール (BRIEF §14, REQUIREMENTS §6.4): figures read as figures at 360/390px ---------- */
+/* figure section first, cards after it as the supplement */
+.fig-main {
+  margin-block: 0 var(--layout-figure-gap);
+}
+.fig-heading {
+  margin-block: 0 var(--space-s);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-heading);
+}
+.fig-main .fig-block {
+  margin-block: 0;
+}
+.fig-cards {
+  margin-block-start: var(--layout-section-gap);
+}
+
+/* the alternative tables / lists: one visible entry at every width, opened on tap */
+.fig-alt > .fig-alt__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: fit-content;
+  min-height: var(--layout-tap);
+  padding: var(--space-xs) var(--space-m);
+  border: var(--line-hair) solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.fig-alt[open] > .fig-alt__summary {
+  margin-block-end: var(--space-m);
+}
+
+/* data tables: labelled rows below the tablet width (no horizontal scrolling on a phone) */
+.fig-table--stack,
+.fig-table--stack caption,
+.fig-table--stack tbody,
+.fig-table--stack tr {
+  display: block;
+  width: 100%;
+}
+.fig-table--stack thead {
+  display: none;
+}
+.fig-table--stack tr {
+  padding-block: var(--space-s);
+  border-bottom: var(--line-hair) solid var(--color-sub);
+}
+.fig-table.fig-table--stack tr > * {
+  display: block;
+  position: static;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-xs) 0;
+  border-bottom: 0;
+  background-color: var(--color-bg);
+}
+.fig-table.fig-table--stack tr > *::before {
+  content: attr(data-label);
+  display: block;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  color: var(--color-sub);
+}
+.fig-table.fig-table--stack tbody th {
+  font-weight: var(--fw-bold);
+}
+.fig-table--stack .fig-b__analysis {
+  margin-inline-start: 0;
+}
+
+/* B: at phone width the cause tree is drawn as boxes joined by connectors (the SVG tree is for ≥ tablet) */
+.fig-b__list .fig-b__item > details > summary,
+.fig-b__list .fig-b__leaf {
+  padding: var(--space-xs) var(--space-s);
+  border: var(--line-hair) solid var(--color-sub);
+  border-radius: var(--radius);
+  background-color: var(--color-bg);
+}
+.fig-b__list > .fig-b__item > details > summary {
+  border: var(--line-strong) solid var(--color-text);
+}
+.fig-b__list .fig-b__ul .fig-b__item {
+  position: relative;
+  margin: 0;
+  padding: var(--space-s) 0 0 var(--space-l);
+  border-left: var(--line-figure) solid var(--color-sub);
+}
+.fig-b__list .fig-b__ul .fig-b__item:last-child {
+  border-left-color: var(--color-bg);
+}
+.fig-b__list .fig-b__ul .fig-b__item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(var(--line-figure) * -1);
+  width: var(--space-m);
+  height: calc(var(--space-s) + var(--layout-tap) / 2);
+  border-left: var(--line-figure) solid var(--color-sub);
+  border-bottom: var(--line-figure) solid var(--color-sub);
+}
+.fig-b__list .fig-b__ul {
+  padding-left: var(--space-s);
+}
+.fig-b__list .fig-b__summary,
+.fig-b__list .fig-b__analysis {
+  margin-inline-start: var(--space-s);
+}
+
+/* C: one small matrix per secret at phone width; the full table with the phase switch from the tablet width */
+.fig-c__wide {
+  display: none;
+}
+.fig-c__mini {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-block: var(--space-m);
+  font-size: var(--fs-small);
+  line-height: var(--lh-heading);
+}
+.fig-c__mini-cap {
+  text-align: left;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
+  padding-bottom: var(--space-xs);
+}
+.fig-c__mini th,
+.fig-c__mini td {
+  padding: var(--space-xs);
+  border-bottom: var(--line-hair) solid var(--color-sub);
+  text-align: center;
+  vertical-align: middle;
+  min-width: 0;
+  height: var(--layout-tap);
+}
+.fig-c__mini .fig-c__mini-phase {
+  width: 34%;
+  text-align: left;
+  font-weight: var(--fw-regular);
+}
+.fig-c__mini thead th {
+  font-weight: var(--fw-bold);
+}
+.fig-c__mini .fig-c__aud {
+  border-left: var(--line-strong) solid var(--color-text);
+  border-right: var(--line-strong) solid var(--color-text);
+}
+.fig-c__mini td .fig-ks {
+  font-size: var(--fs-body);
+}
+
+@media (min-width: 600px) {
+  .fig-table--stack {
+    display: table;
+    width: auto;
+  }
+  .fig-table--stack caption {
+    display: table-caption;
+    width: auto;
+  }
+  .fig-table--stack thead {
+    display: table-header-group;
+  }
+  .fig-table--stack tbody {
+    display: table-row-group;
+    width: auto;
+  }
+  .fig-table--stack tr {
+    display: table-row;
+    width: auto;
+    padding-block: 0;
+    border-bottom: 0;
+  }
+  .fig-table.fig-table--stack tr > * {
+    display: table-cell;
+    width: auto;
+    min-width: calc(var(--fs-small) * 5);
+    padding: var(--space-xs) var(--space-s);
+    border-bottom: var(--line-hair) solid var(--color-sub);
+  }
+  .fig-table.fig-table--stack tr > :first-child {
+    position: sticky;
+  }
+  .fig-table.fig-table--stack tr > *::before {
+    content: none;
+  }
+  .fig-table.fig-table--stack tbody th {
+    font-weight: var(--fw-regular);
+  }
+  .fig-c__narrow {
+    display: none;
+  }
+  .fig-c__wide {
+    display: block;
+  }
+  .fig-controls.fig-c__wide {
+    display: flex;
+  }
+}

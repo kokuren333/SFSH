@@ -2,7 +2,7 @@
  * Site settings contract (WP-5.4, CP-041; REQUIREMENTS U-10 / U-14). Pure validation shared by the harness (which
  * reads harness/config/site.json and stages site.public.json) and the renderer (which re-validates what it reads).
  *
- *   site_name: null           → public name undecided (U-14); the site shows FALLBACK_SITE_NAME.
+ *   site_name: null           → the site shows FALLBACK_SITE_NAME ("SFSH", the official name since AMENDMENT 10).
  *   site_name: "<name>"       → replaces the name everywhere (header, <title> suffix, page text).
  *   contact.kind: "issues"    → the public repository's Issues are the takedown window (U-10 default).
  *   contact.url: null         → the window page says the Issues link is posted when the site opens (no dead link).
@@ -12,7 +12,7 @@ export interface SiteSettings {
   site_name: string | null;
   contact: { kind: 'issues'; url: string | null };
 }
-export const FALLBACK_SITE_NAME = 'SFSH（仮称）';
+export const FALLBACK_SITE_NAME = 'SFSH';
 export const DEFAULT_SITE_SETTINGS: SiteSettings = { site_name: null, contact: { kind: 'issues', url: null } };
 export const SITE_NAME_MAX = 40;
 

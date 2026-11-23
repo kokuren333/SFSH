@@ -30,6 +30,8 @@ import {
   truncate,
   truncateToWidth,
   widthClasses,
+  altFold,
+  stackTables,
 } from "./common.ts";
 import { type GNode, layoutGraph, nodeBox } from "./layout.ts";
 
@@ -365,11 +367,13 @@ function altTables(
     .join("");
   const changeList = phases.length > 1 ? `<p class="fig-alt__title">フェーズごとの関係の変化</p><ul class="fig-alt__list">${changes}</ul>` : "";
   return (
-    `<div class="fig-alt" data-alt-for="relations">` +
-    `<div class="fig-table-wrap"><table class="fig-table"><caption>関係の一覧（代替表示・全${rels.length}件）</caption><thead><tr><th scope="col">人物（から）</th><th scope="col">人物（へ）</th><th scope="col">関係</th><th scope="col">極性</th><th scope="col">期間</th><th scope="col">変化のきっかけ</th><th scope="col">認識区分</th><th scope="col">確度</th></tr></thead><tbody>${rrow}</tbody></table></div>` +
+    altFold(
+      "relations",
+      "関係と人物の一覧表で見る",
+      `<div class="fig-table-wrap"><table class="fig-table"><caption>関係の一覧（代替表示・全${rels.length}件）</caption><thead><tr><th scope="col">人物（から）</th><th scope="col">人物（へ）</th><th scope="col">関係</th><th scope="col">極性</th><th scope="col">期間</th><th scope="col">変化のきっかけ</th><th scope="col">認識区分</th><th scope="col">確度</th></tr></thead><tbody>${rrow}</tbody></table></div>` +
     changeList +
-    `<div class="fig-table-wrap"><table class="fig-table"><caption>登場人物（全${chars.length}名・主要度順）</caption><thead><tr><th scope="col">人物</th><th scope="col">所属</th><th scope="col">主要度</th><th scope="col">説明</th><th scope="col">認識区分</th><th scope="col">確度</th></tr></thead><tbody>${crow}</tbody></table></div>` +
-    `</div>`
+    `<div class="fig-table-wrap"><table class="fig-table"><caption>登場人物（全${chars.length}名・主要度順）</caption><thead><tr><th scope="col">人物</th><th scope="col">所属</th><th scope="col">主要度</th><th scope="col">説明</th><th scope="col">認識区分</th><th scope="col">確度</th></tr></thead><tbody>${crow}</tbody></table></div>`,
+    )
   );
 }
 
@@ -421,5 +425,5 @@ export function renderRelations(viz: VizRelations, ctx: FigureContext): Raw | nu
     `</figure>` +
     altTables(t, chars, viz.factions, ranked, rels, phases, infos) +
     `</div>`;
-  return raw(out);
+  return raw(stackTables(out));
 }

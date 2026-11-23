@@ -3,5 +3,6 @@
  * styles/cards.css, authored by the orchestrator after the OpenAI Apps SDK UI guidelines with the token values in
  * tokens.json. The earlier Haiku/Luna theme (WP-2.6, design_review.json) is superseded. This file stays as the
  * target of `sfsh design generate`, whose prompt states the AMENDMENT 09 rules (5 UI tones, contrast on the
- * surface, radius control ≤ card ≤ 24 + pill, card-first figures) since M6 (ledger CP-052…).
+ * surface, radius control ≤ card ≤ 24 + pill) since M6 (ledger CP-052…), and since A10 (CP-054) the figure rule
+ * (figures shown first at every width, cards as the supplement) and writing spec v2 (prose body, no card frame).
  */

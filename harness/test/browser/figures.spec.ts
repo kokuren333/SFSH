@@ -1,12 +1,14 @@
 /**
- * AMENDMENT 09 (CP-050): card views are the primary presentation at every width (T13); the full SVG / table figure
- * is behind "図で見る" (details.fig-more) from 600px, so T04–T07 and T11 test it at >= 600 after opening it.
+ * A10 図のルール (BRIEF §14, REQUIREMENTS §6.4): the figure comes first and is shown at every width; the AMENDMENT 09
+ * card views follow it as the supplement. (Until A10 the full figure was behind "図で見る" from 600px.)
  * T04 figure A: node positions unchanged across phases per width class; visible relations follow the phase
  * T05 figure B: tree rooted at the Outcome (>=600)
  * T06 figure C: reader column, cells >= 44px, scroll inside the frame only
  * T07 every figure has its alternative right after it, at every width where the full figure is offered
  * T11 state retention (figures): phase (A/C) survives 768 <-> 1280; card expansion (B) survives 360 <-> 1280
- * T13 card views at phone widths (360 / 390): visible, complete, no scroll frame, full figure not displayed
+ * T13 figures at phone widths (360 / 390): the figure itself is visible and reads as a figure (A narrow SVG, B box
+ *     tree, C per-secret matrix), figure text >= 13px as rendered, nothing beyond the viewport, no overflowing
+ *     scroll frame, card views still present
  */
 import type { Page } from '@playwright/test';
 import { test, expect, FULL_WIDTHS, SCROLL_FRAMES, manifest, open, openFull, round, settle } from './lib.ts';
@@ -310,34 +312,39 @@ test('T11 state retention (figures): phase A/C survives 768 <-> 1280; B card exp
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
-function readCards(frames: string[]) {
+function readPhone(frames: string[]) {
   const shown = (e: Element | null) => { if (!e || !e.checkVisibility({ visibilityProperty: true }) || e.getClientRects().length === 0) return false; const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden'; };
   const vw = document.documentElement.clientWidth;
-  const cards = [...document.querySelectorAll('.fc')];
-  const wide = [...document.querySelectorAll('.fc *')].filter(shown).filter((e) => { const r = e.getBoundingClientRect(); return r.right > vw + 0.5 || r.left < -0.5; }).map((e) => e.tagName.toLowerCase() + '.' + (e.getAttribute('class') || ''));
-  const deeper = [...document.querySelectorAll<HTMLDetailsElement>('.fc details.fc-deeper')];
+  const wide = [...document.querySelectorAll('main *')].filter(shown).filter((e) => { const r = e.getBoundingClientRect(); return r.right > vw + 0.5 || r.left < -0.5; }).map((e) => e.tagName.toLowerCase() + '.' + (e.getAttribute('class') || ''));
+  // rendered size of SVG figure text = computed font-size × (rendered width / viewBox width)
+  const svgText: number[] = [];
+  for (const svg of [...document.querySelectorAll<SVGSVGElement>('.fig-main svg.fig-svg')].filter(shown)) {
+    const vb = svg.viewBox.baseVal;
+    const scale = vb && vb.width ? svg.getBoundingClientRect().width / vb.width : 1;
+    for (const t of svg.querySelectorAll('text')) if (shown(t)) svgText.push(parseFloat(getComputedStyle(t).fontSize) * scale);
+  }
+  const htmlText = [...document.querySelectorAll('.fig-main .fig-b__list *, .fig-main .fig-c__mini *')].filter(shown).filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && (n.textContent || '').trim())).map((e) => parseFloat(getComputedStyle(e).fontSize));
   return {
-    cardViews: cards.length,
-    cardViewsVisible: cards.filter(shown).length,
-    fullFigureShown: [...document.querySelectorAll('.fig-more')].some(shown),
-    framesShown: [...document.querySelectorAll(frames.join(','))].filter(shown).length,
-    svgShown: [...document.querySelectorAll('main svg')].filter(shown).length,
+    figureVisible: [...document.querySelectorAll('.fig-main')].some(shown),
+    narrowSvg: [...document.querySelectorAll('.fig-main svg.fig-w--narrow')].filter(shown).length,
+    boxTree: [...document.querySelectorAll('.fig-main .fig-b__list')].filter(shown).length,
+    miniMatrix: [...document.querySelectorAll('.fig-main .fig-c__mini')].filter(shown).length,
+    altEntry: [...document.querySelectorAll('.fig-main details.fig-alt > summary')].filter(shown).length,
+    cardViews: document.querySelectorAll('.fc').length,
+    overflowingFrames: [...document.querySelectorAll(frames.join(','))].filter(shown).filter((f) => f.scrollWidth > f.clientWidth + 1).length,
+    minSvgText: svgText.length ? Math.min(...svgText) : null,
+    minHtmlText: htmlText.length ? Math.min(...htmlText) : null,
     beyondViewport: wide.slice(0, 5),
-    persons: document.querySelectorAll('.fc-person').length,
-    secrets: document.querySelectorAll('.fc-secret').length,
-    outcomes: [...document.querySelectorAll('.fc-outcome .fc-title')].map((t) => (t.textContent || '').trim()),
-    deeperClosedByDefault: deeper.every((d) => !d.open),
-    deeperCount: deeper.length,
   };
 }
 
-test('T13 card views at phone widths: visible, complete, no scroll frame, full figure not displayed', async ({ page, rec }) => {
+test('T13 figures at phone widths: the figure is visible and readable, no overflow, cards kept', async ({ page, rec }) => {
   const m = manifest();
-  const targets: { path: string; fig: 'A' | 'B' | 'C'; outcome: string | null }[] = [];
+  const targets: { path: string; fig: 'A' | 'B' | 'C' }[] = [];
   for (const w of m.works) {
-    if (w.figures.A) targets.push({ path: w.url + 'relations/', fig: 'A', outcome: null });
-    if (w.figures.B) targets.push({ path: w.url + 'reverse-plot/', fig: 'B', outcome: w.outcomeLabel ?? null });
-    if (w.figures.C) targets.push({ path: w.url + 'matrix/', fig: 'C', outcome: null });
+    if (w.figures.A) targets.push({ path: w.url + 'relations/', fig: 'A' });
+    if (w.figures.B) targets.push({ path: w.url + 'reverse-plot/', fig: 'B' });
+    if (w.figures.C) targets.push({ path: w.url + 'matrix/', fig: 'C' });
   }
   test.skip(targets.length === 0, 'no figure in this site');
   const problems: string[] = [];
@@ -345,20 +352,19 @@ test('T13 card views at phone widths: visible, complete, no scroll frame, full f
     await page.setViewportSize({ width, height: 800 });
     for (const t of targets) {
       await open(page, t.path);
-      const r = await page.evaluate(readCards, SCROLL_FRAMES);
+      const r = await page.evaluate(readPhone, SCROLL_FRAMES);
       rec.add({ page: t.path, figure: t.fig, width, ...r });
       const id = `${t.path} @${width}`;
-      if (r.cardViewsVisible === 0) problems.push(`${id}: no visible card view (.fc)`);
-      if (r.fullFigureShown) problems.push(`${id}: full figure (details.fig-more) displayed at phone width`);
-      if (r.framesShown) problems.push(`${id}: ${r.framesShown} horizontal scroll frame(s) shown at phone width`);
-      if (r.svgShown) problems.push(`${id}: ${r.svgShown} SVG drawing(s) shown at phone width`);
-      if (r.beyondViewport.length) problems.push(`${id}: card content beyond the viewport: ${r.beyondViewport.join(', ')}`);
-      if (t.fig === 'A' && r.persons === 0) problems.push(`${id}: no person cards`);
-      if (t.fig === 'C' && r.secrets === 0) problems.push(`${id}: no secret cards`);
-      if (t.fig === 'B') {
-        if (t.outcome && r.outcomes[0] !== t.outcome) problems.push(`${id}: first outcome card "${r.outcomes[0]}" != public.json trees[0] "${t.outcome}"`);
-        if (!r.deeperClosedByDefault) problems.push(`${id}: deeper levels open by default (progressive disclosure expected)`);
-      }
+      if (!r.figureVisible) problems.push(`${id}: no visible figure (.fig-main)`);
+      if (t.fig === 'A' && r.narrowSvg === 0) problems.push(`${id}: narrow SVG of figure A not shown`);
+      if (t.fig === 'B' && r.boxTree === 0) problems.push(`${id}: box tree of figure B not shown`);
+      if (t.fig === 'C' && r.miniMatrix === 0) problems.push(`${id}: per-secret matrix of figure C not shown`);
+      if (r.altEntry === 0) problems.push(`${id}: no visible entry to the alternative table`);
+      if (r.cardViews === 0) problems.push(`${id}: card views missing`);
+      if (r.overflowingFrames) problems.push(`${id}: ${r.overflowingFrames} scroll frame(s) overflow at phone width`);
+      if (r.minSvgText !== null && r.minSvgText < 13 - 0.01) problems.push(`${id}: SVG text rendered at ${r.minSvgText.toFixed(2)}px (< 13)`);
+      if (r.minHtmlText !== null && r.minHtmlText < 13) problems.push(`${id}: figure text ${r.minHtmlText}px (< 13)`);
+      if (r.beyondViewport.length) problems.push(`${id}: content beyond the viewport: ${r.beyondViewport.join(', ')}`);
     }
   }
   expect(problems, problems.join('\n')).toEqual([]);

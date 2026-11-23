@@ -115,6 +115,20 @@ export interface TextBlock {
   epistemic: Epistemic;
 }
 
+/**
+ * AMENDMENT 11: 「あらすじ（全編・ネタバレ）」 — a chronological retelling from the opening to the ending, by chapter
+ * (each chapter = heading + sections; a section is a TextBlock whose heading is the subheading). Fact-layer prose.
+ */
+export interface SynopsisChapter {
+  id: string; // "syn_c01"
+  heading: string;
+  blocks: TextBlock[];
+}
+export interface SynopsisPage {
+  intro: TextBlock[];
+  chapters: SynopsisChapter[];
+}
+
 export interface QuizItem {
   id: string;
   quiz_type: "causal" | "motive" | "counterfactual";
@@ -324,6 +338,8 @@ export interface PublicWork {
     context: { intro: TextBlock[]; items: ContextItem[]; iconic: IconicItem[] };
     interpretations: { intro: TextBlock[]; items: InterpretationItem[] };
     quiz: QuizItem[];
+    /** AMENDMENT 11: long spoiler synopsis on the work page (absent in files composed before A11). */
+    synopsis?: SynopsisPage;
   };
   /** CP-026: non-figure element sections. Pages: /people/ (motives, arcs), /events/ (events, world rules, setups, emotion beats). */
   elements: {

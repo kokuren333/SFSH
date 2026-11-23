@@ -6,7 +6,7 @@
 import type { PublicPhase, VizTimeline } from "../public-types.ts";
 import type { DesignTokens } from "../design/tokens-types.ts";
 import { type Raw, esc, raw } from "../html.ts";
-import { type FigureContext, type WidthClass, cmpStr, fmt, sortedPhases, widthClasses, wrap } from "./common.ts";
+import { type FigureContext, type WidthClass, altFold, cmpStr, fmt, sortedPhases, stackTables, widthClasses, wrap } from "./common.ts";
 
 type Ev = VizTimeline["events"][number];
 const UNKNOWN = "時期の記述なし";
@@ -80,8 +80,8 @@ export function renderTimeline(viz: VizTimeline, ctx: FigureContext): Raw | null
     .map((e) => `<tr><td>${e.story_order}</td><th scope="row">${esc(e.label)}</th><td>${esc((e.disclosure_phase && label.get(e.disclosure_phase)) || UNKNOWN)}</td></tr>`)
     .join("");
   const caption = "時系列の二重軸。左は物語の中で起きた順番、右は作品の中で明かされる時期です。線が交差するところは、起きた順と明かされる順が入れ替わっています。";
-  return raw(
+  return raw(stackTables(
     `<div class="fig-block fig-t" data-fig="timeline"><figure class="fig-figure"><figcaption class="fig-caption">${esc(caption)}</figcaption>${svgs}</figure>` +
-      `<div class="fig-alt" data-alt-for="timeline"><div class="fig-table-wrap"><table class="fig-table"><caption>主要な出来事（代替表示・全${evs.length}件）</caption><thead><tr><th scope="col">物語内の順番</th><th scope="col">出来事</th><th scope="col">明かされる時期</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`,
-  );
+      altFold("timeline", "出来事の一覧表で見る", `<div class="fig-table-wrap"><table class="fig-table"><caption>主要な出来事（代替表示・全${evs.length}件）</caption><thead><tr><th scope="col">物語内の順番</th><th scope="col">出来事</th><th scope="col">明かされる時期</th></tr></thead><tbody>${rows}</tbody></table></div>`) + `</div>`,
+  ));
 }
