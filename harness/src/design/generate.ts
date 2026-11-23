@@ -38,7 +38,7 @@ export const TOKENS_SCHEMA = {
   required: ["schema", "color", "semantic", "font", "space", "radius", "line", "layout", "breakpoint", "motion"],
   properties: {
     schema: { type: "string", enum: ["sfsh-tokens/1"] },
-    color: obj(["bg", "text", "sub", "accent"], hex),
+    color: obj(["bg", "surface", "border", "text", "sub", "accent"], hex),
     semantic: {
       type: "object",
       additionalProperties: false,
@@ -61,7 +61,7 @@ export const TOKENS_SCHEMA = {
       },
     },
     space: obj(["xs", "s", "m", "l", "xl", "section"]),
-    radius: num,
+    radius: obj(["control", "card", "pill"]),
     line: obj(["hair", "figure", "strong"]),
     layout: obj(["textMax", "figureMax", "tap", "tapGap", "sectionGap", "figureGap", "gutter"]),
     breakpoint: obj(["tablet", "pc"]),
@@ -236,6 +236,13 @@ HTML の構造と機能的な配置（グリッド、横スクロール枠、固
 最優先の基準（要件 6.4。数値は厳守）:
 ${i.requirementsText}
 
+AMENDMENT 09（2026-11-23 本人指示。ChatGPT の説明 UI＝OpenAI Apps SDK UI guidelines に寄せる。スマホ 390px 幅で読めることが必須）の規則。上の 6.4 と食い違う古い記述（無彩色3階調・角丸4px以下の単一値）が残っていても、こちらが優先する:
+- 色: UI は無彩色5階調（color.bg 背景・color.surface 面（カード・チップの地）・color.border 罫線・color.text 本文・color.sub 補助文字）＋アクセント1色（color.accent）。本文の背景に色を敷かない。
+- コントラスト: 本文は背景比 7:1 以上かつ面（surface）の上でも 7:1 以上。補助文字とアクセントの文字は背景・面の両方で 4.5:1 以上。
+- 角丸: radius は {"control":<数>,"card":<数>,"pill":<数>}。control ≤ card ≤ 24（4px 刻み）、pill は layout.tap 以上（完全な丸みのチップ）。
+- 提示の形: カード中心（見出し → 補足 → 操作の順、操作は2つまで、カードの中に深い階層や入れ子のスクロールを作らない）。追加の項目は折りたたみで開く。図はどの幅でもカード表示が主で、全幅の SVG 図と表は「図で見る」（600px 以上のみ表示、既定で閉じる）に収める。横スクロール前提の表や縮小して読ませる図を主の表示にしない。
+- 文字: システムフォントのみ。サイズは small と body を中心に4段階まで、太さは2種まで。影・グラデーションは使わない。
+
 theme_css の書き方の規則（機械検査で落ちる）:
 - 色・文字サイズ・太さ・行間・余白・角丸・線幅・時間は必ず var(--…) を使う。使える変数は下の表だけ。色の直書き（#…、rgb()、色名）禁止。px・rem・em の直書きは 0 以外禁止。
 - @media を使うなら (min-width: ${"600"}px) と (min-width: ${"1024"}px) だけ。
@@ -246,12 +253,12 @@ tokens の型（TypeScript）:
 ${i.tokensTypes}
 
 tokens_json の骨組み（キーはすべて必須。省略しない。<…> を自分で決めた値に置き換える）:
-{"schema":"sfsh-tokens/1","color":{"bg":"<#rrggbb>","text":"<#rrggbb>","sub":"<#rrggbb>","accent":"<#rrggbb>"},
+{"schema":"sfsh-tokens/1","color":{"bg":"<#rrggbb>","surface":"<#rrggbb>","border":"<#rrggbb>","text":"<#rrggbb>","sub":"<#rrggbb>","accent":"<#rrggbb>"},
  "semantic":{"epistemic":{"canon":{"color":"<#rrggbb>","label":"確定設定","mark":"<記号>"},"consensus":{"color":"<#rrggbb>","label":"一般的解釈","mark":"<記号>"},"fan_theory":{"color":"<#rrggbb>","label":"考察","mark":"<記号>"},"sfsh_analysis":{"color":"<#rrggbb>","label":"独自分析","mark":"<記号>"}},
   "valence":{"positive":{"color":"<#rrggbb>","dash":"<線種>","label":"友好"},"negative":{"color":"<#rrggbb>","dash":"<線種>","label":"敵対"},"ambivalent":{"color":"<sub など>","dash":"<線種>","label":"両義"},"neutral":{"color":"<sub など>","dash":"<線種>","label":"中立"}},
   "know_state":{"unknown":{"color":"<色>","mark":"<記号>","label":"知らない"},"suspects":{"color":"<色>","mark":"<記号>","label":"疑っている"},"misbelieves":{"color":"<色>","mark":"<記号>","label":"誤解している"},"knows":{"color":"<色>","mark":"<記号>","label":"知っている"}}},
  "font":{"family":"<OS標準フォントの並び>","size":{"small":<数>,"body":<数>,"h2":<数>,"h1":<数>},"weight":{"regular":<数>,"bold":<数>},"lineHeight":{"body":<数>,"heading":<数>}},
- "space":{"xs":<数>,"s":<数>,"m":<数>,"l":<数>,"xl":<数>,"section":<数>},"radius":<数>,"line":{"hair":<数>,"figure":<数>,"strong":<数>},
+ "space":{"xs":<数>,"s":<数>,"m":<数>,"l":<数>,"xl":<数>,"section":<数>},"radius":{"control":<数>,"card":<数>,"pill":<数>},"line":{"hair":<数>,"figure":<数>,"strong":<数>},
  "layout":{"textMax":<数>,"figureMax":<数>,"tap":<数>,"tapGap":<数>,"sectionGap":<数>,"figureGap":<数>,"gutter":<数>},"breakpoint":{"tablet":<数>,"pc":<数>},"motion":{"durationMs":<数>}}
 注意: 1行は全角40字以内 = (layout.textMax − 2×layout.gutter) ≤ 40 × font.size.body（textMax は左右の余白 gutter を含む幅）。
 

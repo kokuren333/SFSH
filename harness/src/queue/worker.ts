@@ -394,7 +394,17 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
       current = q;
       update(jobId, RUNNING_STATES, (x) => (x.state = q), null);
     };
-    st = await runJob(st, runnerDeps({ onState, shouldStop }));
+    // M6 (CP-041 finding a): identify requests received while this job runs at each of its stage boundaries,
+    // so their clarifying / merge / identified notices wait at most one stage instead of the whole job (§4.4).
+    const atBoundary = async (): Promise<void> => {
+      try {
+        await intakeAll();
+        deliverLocal();
+      } catch (e) {
+        appendWorkerLog(env, `boundary intake error (ignored; retried at the next boundary): ${e instanceof Error ? e.message : String(e)}`, now());
+      }
+    };
+    st = await runJob(st, runnerDeps({ onState, shouldStop, atBoundary }));
 
     const finishCancelled = (where: string): JobStateName => {
       const prev = findJob(env, jobId)?.job.state;

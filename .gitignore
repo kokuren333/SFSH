@@ -1,5 +1,6 @@
 # SFSH harness repository boundary (REQUIREMENTS §6.3-8 / WP-0.4)
-# This repo is PRIVATE. Never add the Pages (public) repo as a remote here.
+# Public copy of the SFSH harness (allow-listed export by `sfsh harness-publish`). The working harness repository
+# itself is local and has no remote; never add the Pages (site) repository as a remote there.
 
 # Secrets / credentials
 .env
@@ -13,6 +14,8 @@ secrets/
 /publish/
 # Local test bare repository standing in for the Pages repo until the opening (M5, CP-041)
 /publish-test/
+# Work clone of the public harness repository (sfsh harness-publish; its own repo, origin = kokuren333/SFSH)
+/harness-publish/
 # Publish staging copy of dist + publish lock (M5)
 /site/.publish-stage/
 /site/.publish.lock/
@@ -34,3 +37,6 @@ node_modules/
 # OS / editor noise
 Thumbs.db
 .DS_Store
+
+# AMENDMENT 09 regen backups (sfsh regen; local rollback copies of generated text)
+works/*/gen/_backup-*/

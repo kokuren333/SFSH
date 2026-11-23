@@ -17,22 +17,29 @@ const ISSUES = 'https://github.com/example/example/issues';
 const custom: SiteSettings = { site_name: 'テスト名', contact: { kind: 'issues', url: ISSUES } };
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
 const OPENING = 'Issues へのリンクは、サイトの開設時にこのページに掲示します。';
-let tmp: string, defOut: string, customOut: string, defFiles: string[], customFiles: string[], customA2 = -1;
+// After the opening (CP-048, U-10): the committed contact window is the Issues of the public site repository.
+const OPENED_ISSUES = 'https://github.com/kokuren333/sfsh-site/issues';
+let tmp: string, defOut: string, customOut: string, preOut: string, defFiles: string[], customFiles: string[], preFiles: string[], customA2 = -1;
 const read = (root: string, rel: string) => readFile(join(root, rel), 'utf8');
 
 before(async () => {
   tmp = await mkdtemp(join(tmpdir(), 'sfsh-site-pages-'));
-  defOut = join(tmp, 'default'); customOut = join(tmp, 'custom');
-  // Default = harness/config/site.json (checked below to be the committed defaults).
+  defOut = join(tmp, 'default'); customOut = join(tmp, 'custom'); preOut = join(tmp, 'pre-opening');
+  // Default = harness/config/site.json (checked below to be the committed post-opening settings).
   await build({ worksDir, out: defOut, a2ReportPath: join(tmp, 'a2-default.json') });
+  // The pre-opening code default (CP-041: no link yet) stays supported as an injected setting.
+  await build({ worksDir, out: preOut, a2ReportPath: join(tmp, 'a2-pre.json'), site: DEFAULT_SITE_SETTINGS });
+  preFiles = await listFiles(preOut);
   customA2 = (await build({ worksDir, out: customOut, a2ReportPath: join(tmp, 'a2-custom.json'), site: custom, baseUrl: 'https://example.invalid/project/' })).a2.detected;
   defFiles = await listFiles(defOut); customFiles = await listFiles(customOut);
 });
 after(async () => { if (tmp?.startsWith(tmpdir())) await rm(tmp, { recursive: true, force: true }); });
 
-test('committed harness/config/site.json is the CP-041 default: name undecided, window = public repo Issues without a link yet', async () => {
-  assert.deepEqual(await loadSiteSettings(), DEFAULT_SITE_SETTINGS);
-  assert.deepEqual(JSON.parse(await readFile(siteSettingsPath, 'utf8')), { site_name: null, contact: { kind: 'issues', url: null } });
+test('committed harness/config/site.json is the post-opening setting (CP-048): name undecided (U-14), window = sfsh-site Issues (U-10)', async () => {
+  const opened = { site_name: null, contact: { kind: 'issues', url: OPENED_ISSUES } };
+  assert.deepEqual(await loadSiteSettings(), opened);
+  assert.deepEqual(JSON.parse(await readFile(siteSettingsPath, 'utf8')), opened);
+  assert.deepEqual(DEFAULT_SITE_SETTINGS, { site_name: null, contact: { kind: 'issues', url: null } }, 'code default = pre-opening (no link)');
 });
 
 test('the four common pages exist, are static (no script), listed in the HTML sitemap, and sitemap.xml goes through the same list', async () => {
@@ -59,16 +66,25 @@ test('the four common pages exist, are static (no script), listed in the HTML si
   for (const phrase of ['対象の作品名', '対象のページの URL', '取り下げを求める理由', '個人情報', '15分以内', '検索エンジンのキャッシュ']) assert.ok(takedown.includes(phrase), phrase);
 });
 
-test('default settings: provisional name SFSH（仮称） in header and titles; takedown says the link is posted at opening; no dead or GitHub link', async () => {
+test('committed settings: provisional name SFSH（仮称） in header and titles; takedown links the sfsh-site Issues; no other GitHub link', async () => {
   for (const path of defFiles.filter(p => p.endsWith('.html'))) {
     const page = await read(defOut, path);
     assert.ok(page.includes(`<a class="site-name" href="`) && page.includes(`">${FALLBACK_SITE_NAME}</a>`), path);
     assert.match(page, new RegExp(`<title>[^<]* \\| ${FALLBACK_SITE_NAME}</title>`), path);
-    assert.ok(!page.includes('<a href="https://github.com'), path);
+    const gh = page.match(/<a href="https:\/\/github\.com[^"]*"/g) ?? [];
+    assert.deepEqual(gh, path === 'takedown/index.html' ? [`<a href="${OPENED_ISSUES}"`] : [], path);
   }
   const takedown = await read(defOut, 'takedown/index.html');
+  assert.ok(takedown.includes(`<a href="${OPENED_ISSUES}" rel="noopener">${OPENED_ISSUES}</a>`));
+  assert.ok(!takedown.includes(OPENING));
+});
+
+test('pre-opening defaults (injected DEFAULT_SITE_SETTINGS): takedown says the link is posted at opening; no dead or GitHub link', async () => {
+  for (const path of preFiles.filter(p => p.endsWith('.html'))) assert.ok(!(await read(preOut, path)).includes('<a href="https://github.com'), path);
+  const takedown = await read(preOut, 'takedown/index.html');
   assert.ok(takedown.includes(OPENING));
   assert.doesNotMatch(takedown.replace(/<footer[\s\S]*$/, ''), /<a href="https?:/);
+  assert.deepEqual(preFiles, defFiles, 'same file set as the committed-settings build');
 });
 
 test('injected settings: site name replaces the fallback everywhere, takedown links the Issues URL, nothing else changes structure', async () => {

@@ -9,6 +9,8 @@ import { answerCommand, cancelCommand, enqueueCommand, statusCommand, workerComm
 import { importCommand } from "./commands/import.ts";
 import { discordCommand } from "./commands/discord.ts";
 import { publishCommand } from "./commands/publish.ts";
+import { HARNESS_PUBLISH_USAGE, harnessPublishCommand } from "./commands/harnessPublish.ts";
+import { REGEN_USAGE, regenCommand } from "./commands/regen.ts";
 import type { PortName } from "./model/types.ts";
 
 /** Exit codes: 0 ok / 2 usage error (unknown command, missing args) / 3 command failed. */
@@ -87,6 +89,11 @@ const COMMANDS: Record<string, CommandSpec> = {
     summary: "Build, verify (a)–(g), remote check, snapshot-push to the Pages repo — local test bare until the opening gate (§6.3, U-05)",
     run: (a) => publishCommand(a),
   },
+  "harness-publish": {
+    usage: HARNESS_PUBLISH_USAGE,
+    summary: "Allow-listed export of HEAD (code + design docs) → machine scan → push to the public harness repo kokuren333/SFSH (AMENDMENT 08)",
+    run: (a) => harnessPublishCommand(a),
+  },
   build: { usage: "build [--works-dir <dir>] [--out <dir>] [--base-url <url>]", summary: "Build the static site", run: buildCommand },
   preview: { usage: "preview [--port 8080] [--dir site/dist]", summary: "Local build preview (§WP-2.5)", run: previewCommand },
   check: {
@@ -94,6 +101,12 @@ const COMMANDS: Record<string, CommandSpec> = {
     summary: "S4 automatic check on a work: A-1/A-2 (fix only the matching parts) + advisory report (§5.1, §5.2)",
     positional: 1,
     run: checkCommand,
+  },
+  regen: {
+    usage: REGEN_USAGE,
+    summary: "Re-run S3 write → compose → S4 autocheck for an existing work from saved research only (no search / fetch; backup under gen/_backup-<stamp>/)",
+    positional: 1,
+    run: (a) => regenCommand(a),
   },
   design: {
     usage: "design check [--json-out <file>] | design generate [--sample-dir <dist>] [--dry-run]",

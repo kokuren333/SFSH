@@ -13,6 +13,8 @@ export function resolveColor(t: DesignTokens, c: ColorRef): string {
 /** Variable names (stable contract). */
 export const V = {
   bg: "--color-bg",
+  surface: "--color-surface",
+  border: "--color-border",
   text: "--color-text",
   sub: "--color-sub",
   accent: "--color-accent",
@@ -24,7 +26,10 @@ export const V = {
   fw: (k: "regular" | "bold") => `--fw-${k}`,
   lh: (k: "body" | "heading") => `--lh-${k}`,
   space: (k: "xs" | "s" | "m" | "l" | "xl" | "section") => `--space-${k}`,
+  /** --radius = radius.control (kept for the figure CSS); --radius-card / --radius-pill for cards and chips. */
   radius: "--radius",
+  radiusCard: "--radius-card",
+  radiusPill: "--radius-pill",
   line: (k: "hair" | "figure" | "strong") => `--line-${k}`,
   layout: (k: "textMax" | "figureMax" | "tap" | "tapGap" | "sectionGap" | "figureGap" | "gutter") =>
     `--layout-${k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase())}`,
@@ -42,6 +47,8 @@ export function tokensToCss(t: DesignTokens): string {
   const L: string[] = [];
   const p = (k: string, v: string | number) => L.push(`  ${k}: ${v};`);
   p(V.bg, t.color.bg);
+  p(V.surface, t.color.surface);
+  p(V.border, t.color.border);
   p(V.text, t.color.text);
   p(V.sub, t.color.sub);
   p(V.accent, t.color.accent);
@@ -53,7 +60,9 @@ export function tokensToCss(t: DesignTokens): string {
   for (const k of ["regular", "bold"] as const) p(V.fw(k), t.font.weight[k]);
   for (const k of ["body", "heading"] as const) p(V.lh(k), t.font.lineHeight[k]);
   for (const k of ["xs", "s", "m", "l", "xl", "section"] as const) p(V.space(k), `${t.space[k]}px`);
-  p(V.radius, `${t.radius}px`);
+  p(V.radius, `${t.radius.control}px`);
+  p(V.radiusCard, `${t.radius.card}px`);
+  p(V.radiusPill, `${t.radius.pill}px`);
   for (const k of ["hair", "figure", "strong"] as const) p(V.line(k), `${t.line[k]}px`);
   for (const k of ["textMax", "figureMax", "tap", "tapGap", "sectionGap", "figureGap", "gutter"] as const) p(V.layout(k), `${t.layout[k]}px`);
   p(V.motion, `${t.motion.durationMs}ms`);

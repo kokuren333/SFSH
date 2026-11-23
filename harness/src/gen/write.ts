@@ -6,6 +6,8 @@
  *  - runs the deterministic 30-char guard against saved source raw text: one Haiku rewrite, then sentence drop;
  *  - keeps only based_on ids present in the projection (blocks left without any basis are dropped, C-7);
  *  - block spoiler = max(declared, based_on spoilers); epistemic = canon only if declared canon and all based_on canon.
+ *  - AMENDMENT 09 card layout: lede / paragraph / heading lengths are checked deterministically and recorded as
+ *    advisory warnings in write_report.json (`card_spec`) — never dropped or truncated (AMENDMENT 06).
  * Outputs (internal): gen/pages/<page>.json, gen/reviews/pages.json, gen/write_report.json.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -31,6 +33,7 @@ import { sha256Hex } from "../util/hash.ts";
 import { GEN_FILES, claimIdsOf, maxSpoiler, type PageKey } from "./io.ts";
 import { citableIds } from "./project.ts";
 import {
+  CARD_LIMITS,
   REWRITE_SCHEMA,
   WRITE_REVISION_SCHEMA,
   WRITE_SCHEMA,
@@ -44,6 +47,7 @@ import { S3_TIMEOUT_MS } from "./tags.ts";
 
 /** §5.1 A-1 / PLAN M1 §2: continuous verbatim match threshold (normalized chars). */
 export const VERBATIM_THRESHOLD = 30;
+/** AMENDMENT 09 asks for exactly 3 overview blocks; up to 4 are kept (tolerant), a count ≠ 3 is an advisory in card_spec. */
 export const MAX_OVERVIEW_BLOCKS = 4;
 
 type Slot = "overview" | "relations" | "reverse_plot" | "matrix" | "intro" | "quiz";
@@ -97,7 +101,26 @@ export interface WriteReport {
   dropped_no_basis: string[];
   based_on_filtered: { id: string; removed: string[] }[];
   guard: { sources_checked: number; sources_missing: string[]; threshold: number; records: GuardRecord[] };
+  /** AMENDMENT 09 card layout check (advisory only; absent in reports written before it). */
+  card_spec?: CardSpecReport;
   warnings: string[];
+}
+
+export interface CardSpecFinding {
+  id: string;
+  /** heading | lede | paragraphs[i] | block_total | question | answer | explanation */
+  field: string;
+  chars: number;
+  limit: number;
+}
+export interface CardSpecReport {
+  limits: typeof CARD_LIMITS;
+  overview_blocks: number;
+  overview_blocks_expected: number;
+  /** Fields longer than their limit (characters = code points). */
+  over_limit: CardSpecFinding[];
+  /** Blocks whose paragraph count is outside the card shape (overview: lede + 1–2; figure note / intro: lede + 0–1). */
+  paragraph_count: { id: string; paragraphs: number; expected: string }[];
 }
 
 const SPOILERS = new Set(["none", "mid", "ending"]);
@@ -304,6 +327,38 @@ function dropFlagged(u: Unit, idx: Set<string>, rec: GuardRecord): Unit | null {
   return next.paragraphs.length ? next : null;
 }
 
+// ------------------------------------------------------------------ card layout (advisory)
+const chars = (s: string) => [...s].length;
+
+/** AMENDMENT 09: deterministic, advisory-only check of the card layout. Never changes the units. */
+export function cardSpecCheck(units: Unit[]): CardSpecReport {
+  const over: CardSpecFinding[] = [];
+  const counts: CardSpecReport["paragraph_count"] = [];
+  const check = (id: string, field: string, text: string | null, limit: number) => {
+    if (text && chars(text) > limit) over.push({ id, field, chars: chars(text), limit });
+  };
+  for (const u of units) {
+    if (u.quiz) {
+      check(u.id, "question", u.quiz.question, CARD_LIMITS.quizQuestion);
+      check(u.id, "answer", u.quiz.answer, CARD_LIMITS.quizAnswer);
+      check(u.id, "explanation", u.quiz.explanation, CARD_LIMITS.quizExplanation);
+      continue;
+    }
+    check(u.id, "heading", u.heading, CARD_LIMITS.heading);
+    u.paragraphs.forEach((p, i) => (i === 0 ? check(u.id, "lede", p, CARD_LIMITS.lede) : check(u.id, `paragraphs[${i}]`, p, CARD_LIMITS.paragraph)));
+    const [min, max] = u.slot === "overview" ? [2, 3] : [1, 2];
+    if (u.paragraphs.length < min || u.paragraphs.length > max) counts.push({ id: u.id, paragraphs: u.paragraphs.length, expected: min === max ? String(min) : `${min}-${max}` });
+    if (u.slot === "overview") check(u.id, "block_total", u.paragraphs.join(""), CARD_LIMITS.overviewBlock);
+  }
+  return {
+    limits: CARD_LIMITS,
+    overview_blocks: units.filter((u) => u.slot === "overview").length,
+    overview_blocks_expected: CARD_LIMITS.overviewBlocks,
+    over_limit: over,
+    paragraph_count: counts,
+  };
+}
+
 // ------------------------------------------------------------------ stage
 function reviewClaims(workDir: string, pw: PublicWork) {
   const nkg = readJson<Nkg | null>(workDir, "nkg/nkg.json", null);
@@ -461,6 +516,20 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
     finalUnits.push({ ...u, based_on: based });
   }
 
+  // 4b) card layout (AMENDMENT 09) — advisory only, nothing is dropped or truncated
+  const cardSpec = cardSpecCheck(finalUnits);
+  if (cardSpec.overview_blocks !== cardSpec.overview_blocks_expected)
+    warnings.push(`write: card spec: ${cardSpec.overview_blocks} overview block(s) (expected ${cardSpec.overview_blocks_expected}) — kept as written`);
+  if (cardSpec.over_limit.length)
+    warnings.push(
+      `write: card spec: ${cardSpec.over_limit.length} field(s) over the length limit (advisory, kept): ${cardSpec.over_limit
+        .slice(0, 6)
+        .map((f) => `${f.id}.${f.field} ${f.chars}/${f.limit}`)
+        .join(", ")}`,
+    );
+  if (cardSpec.paragraph_count.length)
+    warnings.push(`write: card spec: ${cardSpec.paragraph_count.length} block(s) outside the paragraph count (advisory, kept): ${cardSpec.paragraph_count.map((c) => `${c.id} ${c.paragraphs} (${c.expected})`).join(", ")}`);
+
   // 5) finalize spoiler / epistemic and write the internal page files
   const now = ctx.now().toISOString();
   const statusOf = (id: string): ReviewState => outcome.status[id] ?? "agreed";
@@ -525,6 +594,7 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
     dropped_no_basis: droppedNoBasis,
     based_on_filtered: basedOnFiltered,
     guard: { sources_checked: src.checked, sources_missing: src.missing, threshold: VERBATIM_THRESHOLD, records },
+    card_spec: cardSpec,
     warnings,
   };
   outputs.push(writeJson(ctx.workDir, GEN_FILES.writeReport, report));
@@ -555,6 +625,9 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
       guard_dropped_sentences: records.reduce((n, r) => n + r.dropped_sentences.length, 0),
       guard_dropped_units: records.filter((r) => r.dropped_unit).length,
       advisory: advisory.length,
+      overview_blocks: cardSpec.overview_blocks,
+      card_spec_over_limit: cardSpec.over_limit.length,
+      card_spec_paragraph_count: cardSpec.paragraph_count.length,
     },
     warnings,
   };

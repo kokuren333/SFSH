@@ -1,12 +1,15 @@
 /**
+ * AMENDMENT 09 (CP-050): card views are the primary presentation at every width (T13); the full SVG / table figure
+ * is behind "図で見る" (details.fig-more) from 600px, so T04–T07 and T11 test it at >= 600 after opening it.
  * T04 figure A: node positions unchanged across phases per width class; visible relations follow the phase
- * T05 figure B: tree rooted at the Outcome (>=600), indented list with depth-2 expansion (360)
+ * T05 figure B: tree rooted at the Outcome (>=600)
  * T06 figure C: reader column, cells >= 44px, scroll inside the frame only
- * T07 every figure has its alternative right after it, at every width
- * T11 state retention (figures): phase (A/C) and expansion survive 360 <-> 1280
+ * T07 every figure has its alternative right after it, at every width where the full figure is offered
+ * T11 state retention (figures): phase (A/C) survives 768 <-> 1280; card expansion (B) survives 360 <-> 1280
+ * T13 card views at phone widths (360 / 390): visible, complete, no scroll frame, full figure not displayed
  */
 import type { Page } from '@playwright/test';
-import { test, expect, WIDTHS, manifest, open, round, settle } from './lib.ts';
+import { test, expect, FULL_WIDTHS, SCROLL_FRAMES, manifest, open, openFull, round, settle } from './lib.ts';
 import { readFigA } from './probes.ts';
 
 const WCLASS: Record<number, string> = { 360: 'narrow', 768: 'medium', 1280: 'wide' };
@@ -55,7 +58,7 @@ async function checkPhases(page: Page, wpath: string, width: number, setName: st
   return { problems, varies, changed };
 }
 
-for (const width of [360, 768, 1280]) {
+for (const width of [768, 1280]) {
   test(`T04 figure A node positions unchanged across phases @${width}`, async ({ page, rec }) => {
     const works = manifest().works.filter((w) => w.figures.A);
     test.skip(works.length === 0, 'no work with figure A');
@@ -64,6 +67,7 @@ for (const width of [360, 768, 1280]) {
     let anyVaries = false;
     for (const w of works) {
       await open(page, w.url + 'relations/');
+      await openFull(page);
       const main = await checkPhases(page, w.url + 'relations/', width, 'main', rec);
       problems.push(...main.problems);
       anyVaries ||= main.varies;
@@ -101,15 +105,16 @@ function readFigB() {
 
 const sameLabel = (shownText: string, label: string) => shownText === label || (shownText.endsWith('…') && label.startsWith(shownText.slice(0, -1)));
 
-test('T05 figure B tree rooted at the Outcome; list at 360 with depth-2 expansion', async ({ page, rec }) => {
+test('T05 figure B tree rooted at the Outcome (full figure, >= 600)', async ({ page, rec }) => {
   const works = manifest().works.filter((w) => w.figures.B);
   test.skip(works.length === 0, 'no work with figure B');
   const problems: string[] = [];
-  for (const width of WIDTHS) {
+  for (const width of FULL_WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
     for (const w of works) {
       const p = w.url + 'reverse-plot/';
       await open(page, p);
+      await openFull(page);
       const r = await page.evaluate(readFigB);
       if (!r) { problems.push(`${p} @${width}: no figure[data-tree]`); continue; }
       const label = w.outcomeLabel ?? r.rootName ?? '';
@@ -161,11 +166,12 @@ test('T06 figure C reader column, cells >= 44px, scroll inside the frame only', 
   const works = manifest().works.filter((w) => w.figures.C);
   test.skip(works.length === 0, 'no work with figure C');
   const problems: string[] = [];
-  for (const width of WIDTHS) {
+  for (const width of FULL_WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
     for (const w of works) {
       const p = w.url + 'matrix/';
       await open(page, p);
+      await openFull(page);
       const r = await page.evaluate(readFigC);
       if (!r || !r.frame) { problems.push(`${p} @${width}: no C block / scroll frame`); continue; }
       const overflows = r.frame.scrollWidth > r.frame.clientWidth + 1;
@@ -213,7 +219,7 @@ function readAlts() {
   }));
 }
 
-test('T07 every figure has its alternative table/list right after it at every width', async ({ page, rec }) => {
+test('T07 every figure has its alternative table/list right after it (full figure, >= 600)', async ({ page, rec }) => {
   const m = manifest();
   const targets: { path: string; fig: string }[] = [];
   for (const w of m.works) {
@@ -223,10 +229,11 @@ test('T07 every figure has its alternative table/list right after it at every wi
   }
   test.skip(targets.length === 0, 'no figure in this site');
   const problems: string[] = [];
-  for (const width of WIDTHS) {
+  for (const width of FULL_WIDTHS) {
     await page.setViewportSize({ width, height: 800 });
     for (const t of targets) {
       await open(page, t.path);
+      await openFull(page);
       const blocks = await page.evaluate(readAlts);
       rec.add({ page: t.path, figure: t.fig, width, blocks });
       if (blocks.length === 0) problems.push(`${t.path} @${width}: no .fig-block`);
@@ -243,21 +250,22 @@ test('T07 every figure has its alternative table/list right after it at every wi
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
-test('T11 state retention (figures): phase A/C and B expansion survive 360 <-> 1280', async ({ page, rec }) => {
+test('T11 state retention (figures): phase A/C survives 768 <-> 1280; B card expansion survives 360 <-> 1280', async ({ page, rec }) => {
   const m = manifest();
   const problems: string[] = [];
   let checked = 0;
   for (const w of m.works) {
     for (const [fig, sub, block] of [['A', 'relations/', '.fig-a'], ['C', 'matrix/', '.fig-c']] as const) {
       if (!w.figures[fig]) continue;
-      await page.setViewportSize({ width: 360, height: 800 });
+      await page.setViewportSize({ width: 768, height: 800 });
       await open(page, w.url + sub);
+      await openFull(page);
       const { opts, list } = await phaseOptions(page, block);
       if (list.length < 2) { rec.add({ work: w.id, figure: fig, note: 'single phase; nothing to retain' }); continue; }
       const target = list[list.length - 1]!;
       await opts.nth(target.i).click(); await settle(page);
       const states: Record<string, unknown>[] = [];
-      for (const width of [1280, 360, 1280]) {
+      for (const width of [1280, 768, 1280]) {
         await page.setViewportSize({ width, height: 800 });
         const s = await page.evaluate((sel) => {
           const b = document.querySelector(sel)!;
@@ -272,6 +280,7 @@ test('T11 state retention (figures): phase A/C and B expansion survive 360 <-> 1
       }
       // reload restores from ?phase=
       await page.reload();
+      await openFull(page);
       const after = await page.evaluate((sel) => document.querySelector(sel)!.querySelector<HTMLInputElement>('.fig-phase-radio:checked')?.dataset.pi ?? null, block);
       if (after !== target.pi) problems.push(`${w.url}${sub}: phase not restored from URL after reload (checked ${after})`);
       rec.add({ work: w.id, figure: fig, selected: target, states, afterReloadPi: after });
@@ -280,7 +289,7 @@ test('T11 state retention (figures): phase A/C and B expansion survive 360 <-> 1
     if (w.figures.B) {
       await page.setViewportSize({ width: 360, height: 800 });
       await open(page, w.url + 'reverse-plot/');
-      const summ = page.locator('.fig-b .fig-b__list details > summary').first();
+      const summ = page.locator('.fc-plot details.fc-deeper > summary').first();
       if ((await summ.count()) > 0) {
         const before = await summ.evaluate((s) => (s.parentElement as HTMLDetailsElement).open);
         await summ.click();
@@ -288,7 +297,7 @@ test('T11 state retention (figures): phase A/C and B expansion survive 360 <-> 1
         const states: Record<string, unknown>[] = [];
         for (const width of [1280, 360]) {
           await page.setViewportSize({ width, height: 800 });
-          const open = await page.locator('.fig-b .fig-b__list details').first().evaluate((d) => (d as HTMLDetailsElement).open);
+          const open = await page.locator('.fc-plot details.fc-deeper').first().evaluate((d) => (d as HTMLDetailsElement).open);
           states.push({ width, open });
           if (open !== toggled) problems.push(`${w.url}reverse-plot/ @${width}: expansion state lost (open=${open}, expected ${toggled})`);
         }
@@ -298,5 +307,59 @@ test('T11 state retention (figures): phase A/C and B expansion survive 360 <-> 1
     }
   }
   test.skip(checked === 0, 'no phased figure / expandable list in this site');
+  expect(problems, problems.join('\n')).toEqual([]);
+});
+
+function readCards(frames: string[]) {
+  const shown = (e: Element | null) => { if (!e || !e.checkVisibility({ visibilityProperty: true }) || e.getClientRects().length === 0) return false; const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden'; };
+  const vw = document.documentElement.clientWidth;
+  const cards = [...document.querySelectorAll('.fc')];
+  const wide = [...document.querySelectorAll('.fc *')].filter(shown).filter((e) => { const r = e.getBoundingClientRect(); return r.right > vw + 0.5 || r.left < -0.5; }).map((e) => e.tagName.toLowerCase() + '.' + (e.getAttribute('class') || ''));
+  const deeper = [...document.querySelectorAll<HTMLDetailsElement>('.fc details.fc-deeper')];
+  return {
+    cardViews: cards.length,
+    cardViewsVisible: cards.filter(shown).length,
+    fullFigureShown: [...document.querySelectorAll('.fig-more')].some(shown),
+    framesShown: [...document.querySelectorAll(frames.join(','))].filter(shown).length,
+    svgShown: [...document.querySelectorAll('main svg')].filter(shown).length,
+    beyondViewport: wide.slice(0, 5),
+    persons: document.querySelectorAll('.fc-person').length,
+    secrets: document.querySelectorAll('.fc-secret').length,
+    outcomes: [...document.querySelectorAll('.fc-outcome .fc-title')].map((t) => (t.textContent || '').trim()),
+    deeperClosedByDefault: deeper.every((d) => !d.open),
+    deeperCount: deeper.length,
+  };
+}
+
+test('T13 card views at phone widths: visible, complete, no scroll frame, full figure not displayed', async ({ page, rec }) => {
+  const m = manifest();
+  const targets: { path: string; fig: 'A' | 'B' | 'C'; outcome: string | null }[] = [];
+  for (const w of m.works) {
+    if (w.figures.A) targets.push({ path: w.url + 'relations/', fig: 'A', outcome: null });
+    if (w.figures.B) targets.push({ path: w.url + 'reverse-plot/', fig: 'B', outcome: w.outcomeLabel ?? null });
+    if (w.figures.C) targets.push({ path: w.url + 'matrix/', fig: 'C', outcome: null });
+  }
+  test.skip(targets.length === 0, 'no figure in this site');
+  const problems: string[] = [];
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const t of targets) {
+      await open(page, t.path);
+      const r = await page.evaluate(readCards, SCROLL_FRAMES);
+      rec.add({ page: t.path, figure: t.fig, width, ...r });
+      const id = `${t.path} @${width}`;
+      if (r.cardViewsVisible === 0) problems.push(`${id}: no visible card view (.fc)`);
+      if (r.fullFigureShown) problems.push(`${id}: full figure (details.fig-more) displayed at phone width`);
+      if (r.framesShown) problems.push(`${id}: ${r.framesShown} horizontal scroll frame(s) shown at phone width`);
+      if (r.svgShown) problems.push(`${id}: ${r.svgShown} SVG drawing(s) shown at phone width`);
+      if (r.beyondViewport.length) problems.push(`${id}: card content beyond the viewport: ${r.beyondViewport.join(', ')}`);
+      if (t.fig === 'A' && r.persons === 0) problems.push(`${id}: no person cards`);
+      if (t.fig === 'C' && r.secrets === 0) problems.push(`${id}: no secret cards`);
+      if (t.fig === 'B') {
+        if (t.outcome && r.outcomes[0] !== t.outcome) problems.push(`${id}: first outcome card "${r.outcomes[0]}" != public.json trees[0] "${t.outcome}"`);
+        if (!r.deeperClosedByDefault) problems.push(`${id}: deeper levels open by default (progressive disclosure expected)`);
+      }
+    }
+  }
   expect(problems, problems.join('\n')).toEqual([]);
 });

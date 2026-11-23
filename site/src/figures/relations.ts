@@ -277,7 +277,7 @@ function renderSvg(p: SvgInput): string {
         )
         .join("");
       labs.push(
-        `<g class="fig-a__elabel${change ? " fig-a__elabel--changed" : ""}" data-rel="${esc(r.id)}"${chg}><rect x="${fmt(box.x0)}" y="${fmt(box.y0)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(t.radius)}"/>${texts}</g>`,
+        `<g class="fig-a__elabel${change ? " fig-a__elabel--changed" : ""}" data-rel="${esc(r.id)}"${chg}><rect x="${fmt(box.x0)}" y="${fmt(box.y0)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(Math.min(t.radius.control, h / 2))}"/>${texts}</g>`,
       );
     }
     groups.push(`<g ${phaseAttrs(phases, i)}>${under.join("")}${edges.join("")}${labs.join("")}</g>`);

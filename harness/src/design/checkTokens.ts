@@ -2,11 +2,14 @@
  * WP-2.7: machine check of the design tokens and the static CSS against REQUIREMENTS §6.4 (CP-025).
  * Pure functions + one file-system entry point (`runDesignChecks`). Deterministic; no model calls.
  *
- * Token checks (tokens.json): UI = 3 achromatic tones + 1 accent; 4 epistemic colors; 2 polarity colors
+ * AMENDMENT 09 (BRIEF §14, CP-050): UI = 5 achromatic tones (bg / surface / border / text / sub) + 1 accent, body and
+ * secondary text also readable on the surface tone, card radius ≤ 24 with control ≤ card and a pill radius
+ * (replaces "single radius ≤ 4"); the rest of §6.4 below is unchanged.
+ * Token checks (tokens.json, as of AMENDMENT 09): UI = 5 achromatic tones + 1 accent; 4 epistemic colors; 2 polarity colors
  * (ambivalent/neutral achromatic); knowledge-state colors drawn from the existing palette (no new hues);
  * contrast (body ≥ 7:1, secondary text / accent text ≥ 4.5:1, figure marks/lines ≥ 3:1); non-color cues
  * (distinct labels + marks / dashes); ≤ 4 font sizes (body ≥ 16, small ≥ 13), ≤ 2 weights, body line height
- * 1.7–1.8, OS fonts only; 8px spacing base with 4px steps; single radius ≤ 4; layout limits; breakpoints
+ * 1.7–1.8, OS fonts only; 8px spacing base with 4px steps; radius control ≤ card ≤ 24, pill ≥ tap; layout limits; breakpoints
  * 600/1024; motion ≤ 200ms.
  * CSS checks (styles/*.css, design/theme.css): no color literals, no px/rem/em literals except 0 and media
  * queries (which must equal the token breakpoints), font-size/weight/line-height/spacing/radius/durations via
@@ -73,6 +76,8 @@ export function checkTokens(t: DesignTokens): CheckReport {
   // structure / hex validity
   const allHex: [string, string][] = [
     ["color.bg", t.color?.bg],
+    ["color.surface", t.color?.surface],
+    ["color.border", t.color?.border],
     ["color.text", t.color?.text],
     ["color.sub", t.color?.sub],
     ["color.accent", t.color?.accent],
@@ -92,10 +97,12 @@ export function checkTokens(t: DesignTokens): CheckReport {
   const VAL = ["positive", "negative", "ambivalent", "neutral"] as const;
   add("schema.keys", EP.every((k) => ep[k]) && KS.every((k) => ks[k]) && VAL.every((k) => val[k]), "epistemic 4 / know_state 4 / valence 4 keys present");
 
-  // UI palette: 3 achromatic + 1 accent
-  const neutrals = [t.color.bg, t.color.text, t.color.sub];
-  add("color.ui_neutrals_achromatic", neutrals.every((c) => !isChromatic(c)), `chroma bg=${chroma(t.color.bg)} text=${chroma(t.color.text)} sub=${chroma(t.color.sub)} (≤${ACHROMATIC_MAX_CHROMA})`);
-  add("color.ui_three_tones_distinct", new Set(neutrals.map((c) => c.toLowerCase())).size === 3, neutrals.join(" / "));
+  // UI palette: 5 achromatic tones + 1 accent (AMENDMENT 09)
+  const neutrals = [t.color.bg, t.color.surface, t.color.border, t.color.text, t.color.sub];
+  add("color.ui_neutrals_achromatic", neutrals.every((c) => !isChromatic(c)), `chroma bg=${chroma(t.color.bg)} surface=${chroma(t.color.surface)} border=${chroma(t.color.border)} text=${chroma(t.color.text)} sub=${chroma(t.color.sub)} (≤${ACHROMATIC_MAX_CHROMA})`);
+  add("color.ui_tones_distinct", new Set(neutrals.map((c) => c.toLowerCase())).size === 5, neutrals.join(" / "));
+  // surface / border are quiet: lighter than the secondary text; the border is visible on bg, the surface stays subtle
+  add("color.surface_border_quiet", luminance(t.color.surface) > luminance(t.color.sub) && luminance(t.color.border) > luminance(t.color.sub) && contrast(t.color.border, t.color.bg) >= 1.2 && contrast(t.color.surface, t.color.bg) < 1.2, `surface/bg ${r2(contrast(t.color.surface, t.color.bg))}:1, border/bg ${r2(contrast(t.color.border, t.color.bg))}:1`);
   add("color.accent_chromatic", isChromatic(t.color.accent), `accent ${t.color.accent} chroma=${chroma(t.color.accent)}`);
   // semantic colors
   const epColors = EP.map((k) => ep[k].color.toLowerCase());
@@ -115,6 +122,8 @@ export function checkTokens(t: DesignTokens): CheckReport {
   add("contrast.body_7", contrast(t.color.text, bg) >= 7, `text/bg ${r2(contrast(t.color.text, bg))}:1`);
   add("contrast.secondary_4_5", contrast(t.color.sub, bg) >= 4.5, `sub/bg ${r2(contrast(t.color.sub, bg))}:1`);
   add("contrast.accent_text_4_5", contrast(t.color.accent, bg) >= 4.5, `accent/bg ${r2(contrast(t.color.accent, bg))}:1 (links/UI text)`);
+  const sf = t.color.surface;
+  add("contrast.on_surface", contrast(t.color.text, sf) >= 7 && contrast(t.color.sub, sf) >= 4.5 && contrast(t.color.accent, sf) >= 4.5, `on surface: text ${r2(contrast(t.color.text, sf))} / sub ${r2(contrast(t.color.sub, sf))} / accent ${r2(contrast(t.color.accent, sf))}:1 (≥ 7 / 4.5 / 4.5)`);
   const figColors: [string, string][] = [
     ...EP.map((k) => [`epistemic.${k}`, ep[k].color] as [string, string]),
     ...VAL.map((k) => [`valence.${k}`, resolve(t, val[k].color)] as [string, string]),
@@ -145,7 +154,9 @@ export function checkTokens(t: DesignTokens): CheckReport {
   add("space.4px_steps", sp.every((v) => Number.isFinite(v) && v > 0 && v % 4 === 0), sp.join(" "));
   add("space.8px_base", t.space.s === 8, `s = ${t.space.s}`);
   add("space.section_ge_48", t.space.section >= 48 && t.layout.sectionGap >= 48, `space.section ${t.space.section} / layout.sectionGap ${t.layout.sectionGap}`);
-  add("radius.single_le_4", typeof t.radius === "number" && t.radius >= 0 && t.radius <= 4, `radius ${t.radius}`);
+  const rd = t.radius ?? ({} as DesignTokens["radius"]);
+  add("radius.card_le_24", [rd.control, rd.card].every((v) => typeof v === "number" && v >= 0 && v % 4 === 0) && rd.control <= rd.card && rd.card <= 24, `control ${rd.control} ≤ card ${rd.card} ≤ 24 (4px steps)`);
+  add("radius.pill", typeof rd.pill === "number" && rd.pill >= t.layout.tap, `pill ${rd.pill} ≥ tap ${t.layout.tap} (fully rounded chips)`);
   const L = t.layout;
   add("layout.text_max_720", L.textMax <= 720 && L.textMax >= 320, `textMax ${L.textMax}`);
   // §6.4 "1行は全角40字以内": the text box (column minus side gutters) holds at most 40 full-width chars at body size.

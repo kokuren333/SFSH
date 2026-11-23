@@ -356,8 +356,10 @@ export async function publishSite(env: PublishEnv, opts: PublishOptions): Promis
         }
       } else if (target.baseUrl) {
         const uo = { loopbackOnly: false, timeoutMs: cfg.url_check.timeout_s * 1000, intervalMs: cfg.url_check.interval_s * 1000, fetchImpl: env.fetchImpl };
-        result.post_verify.url = await verifyUrl(target.baseUrl, manifest, self, uo);
-        result.post_verify.url_note = "public URL";
+        // M6: wait for the Pages deploy (cache-busted manifest = the new one) before the canonical URLs are requested.
+        result.post_verify.url = await verifyUrl(target.baseUrl, manifest, self, { ...uo, deploySentinel: { sha256: self.sha256, tag: result.release_id } });
+        const dw = result.post_verify.url.deploy;
+        result.post_verify.url_note = `public URL${dw ? ` (deploy ${dw.ok ? "observed" : "NOT observed"} after ${Math.round(dw.waited_ms / 1000)}s, ${dw.polls} polls)` : ""}`;
         if (opts.takedown) {
           result.url_404 = await check404(target.baseUrl, opts.takedown.workId, opts.takedown.needles, uo);
           result.url_404_note = "public URL";

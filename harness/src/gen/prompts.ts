@@ -129,15 +129,40 @@ ${lastRoundNote(o.round, o.maxRounds)}`;
 }
 
 // ------------------------------------------------------------------ page text
-/** Rules carried by every S3 writing / revision / rewrite prompt (C-2, C-3, C-4, C-7). */
+/**
+ * Card layout limits (AMENDMENT 09). The site renders every TextBlock as a card: heading = card title,
+ * paragraphs[0] = lede (shown large), the rest = body. Counted in characters (code points). Advisory only:
+ * write.ts records overruns in write_report.json and never drops or truncates text (AMENDMENT 06).
+ */
+export const CARD_LIMITS = {
+  heading: 14,
+  lede: 60,
+  paragraph: 120,
+  overviewBlock: 300,
+  overviewBlocks: 3,
+  quizQuestion: 60,
+  quizAnswer: 60,
+  quizExplanation: 120,
+} as const;
+
+/** Rules carried by every S3 writing / revision / rewrite prompt (C-2, C-3, C-4, C-7, AMENDMENT 09 card layout). */
 export const WRITE_RULES = `# 執筆規則（必ず守る）
 - すべて自分の言葉で書く。出典の文を写さない（言い回しの流用も不可）。
 - 原作の文章・台詞・せりふを一切引用しない。場面の再現や描写の言い換えもしない（固有名＝作品名・人名・用語は可）。
 - 場面順のあらすじ（シーンごとの再話）にしない。人物・因果・テーマに抽象化し、分析と批評を中心にする。
 - 根拠は下に示す要素（ID 付き）だけ。各ブロックの based_on に、そのブロックが拠って立つ要素 ID を必ず1つ以上入れる。示されていない事柄や自分の記憶で補わない。
-- 本文はプレーンテキストの日本語。Markdown・HTML・箇条書き記号・絵文字を使わない。1段落はおよそ80〜200字。
+- 本文はプレーンテキストの日本語。Markdown・HTML・箇条書き記号・絵文字を使わない。
 - spoiler: そのブロックが明かす内容の最大（none＝前提のみ／mid＝中盤の展開／ending＝結末に関わる）。
-- epistemic: 作品内の確定事実だけを述べるなら canon、分析・解釈を含むなら sfsh_analysis。迷ったら sfsh_analysis。`;
+- epistemic: 作品内の確定事実だけを述べるなら canon、分析・解釈を含むなら sfsh_analysis。迷ったら sfsh_analysis。
+
+# 書き方（カード表示に合わせる）
+- 各ブロックは1枚のカードとして表示される。heading がカードの見出し、paragraphs の1つ目がリード（大きく表示される）、2つ目以降が本文になる。
+- 見出し（heading）は全角${CARD_LIMITS.heading}字以内。体言止めや問いの形でよい。
+- リード（paragraphs の1つ目）は、そのカードの要点を1文で書く（全角${CARD_LIMITS.lede}字以内）。
+- 本文の段落（paragraphs の2つ目以降）は1段落につき全角${CARD_LIMITS.paragraph}字以内。
+- 短い文で書く。1文に1つの論点だけを入れる。
+- 専門用語は避けるか、短く言い換える。
+- です・ます調で簡潔に書く。読者に話しかける言い回し（呼びかけや「〜してみましょう」など）は使わない。`;
 
 const BLOCK_PROPS = {
   heading: { type: ["string", "null"] },
@@ -261,10 +286,15 @@ export function writePrompt(o: WritePromptInput): string {
 ${WRITE_RULES}
 
 # 書くもの
-1. overview: 2〜4ブロック。(1) この作品は何か、(2) 人物と因果の水準で何が起きるか（場面順に追わない）、(3) なぜこの作品が効いているのか（構造上の工夫・テーマ）。各ブロックに短い見出し（heading）を付ける。因果は events（caused_by／leads_to）、人物の欲望と変化は motives・arcs、世界の決まりは world_rules を根拠に使い、based_on にその ID を入れてよい。
-2. figure_notes: 図ごとに1ブロック（1〜2段落、短く）。この作品でその図をどう読むとよいか（どこに注目するか）。図そのものの説明書ではなく、この作品の読み方を書く。書く図: ${figs.join(", ") || "なし（空配列にする）"}。図の意味: relations＝人物関係図（フェーズで関係が変わる）／reverse_plot＝結末から原因へさかのぼる木／matrix＝誰がどの秘密をいつ知っているか（読者の列を含む）。
-3. intros: ページごとに1ブロック（1〜2段落）。ページの導入。書くページ: ${intros.join(", ") || "なし（空配列にする）"}。themes＝テーマ・批評／context＝文化的文脈／interpretations＝解釈の分岐。
-4. quiz: 下の各クイズ項目（quiz_id）について、問題・答え・解説を読者向けに整えて書き直す。因果・動機・反実仮想を問う形にし、固有名や数字を当てさせる暗記問題にしない。解説は答えがなぜ導けるかを1〜3文で。新しい quiz_id を作らない。
+1. overview: ちょうど${CARD_LIMITS.overviewBlocks}ブロック。次の順に、次の役割で書く。
+   (1) この作品は何か
+   (2) 人物と因果の水準で何が起きるか（場面順に追わない）
+   (3) なぜこの作品が効いているのか（構造上の工夫・テーマ）
+   各ブロックの形: heading＝短い見出し（全角${CARD_LIMITS.heading}字以内、体言止めや問いでよい）。paragraphs の1つ目＝その節の要点を1文で（全角${CARD_LIMITS.lede}字以内）。続けて1〜2段落（各全角${CARD_LIMITS.paragraph}字以内）。1ブロックの合計は全角${CARD_LIMITS.overviewBlock}字以内。
+   因果は events（caused_by／leads_to）、人物の欲望と変化は motives・arcs、世界の決まりは world_rules を根拠に使い、based_on にその ID を入れてよい。
+2. figure_notes: 図ごとに1ブロック。heading は null か全角${CARD_LIMITS.heading}字以内。paragraphs の1つ目＝この図でまず見る点を1文で（全角${CARD_LIMITS.lede}字以内）。必要なら段落をもう1つだけ足す（全角${CARD_LIMITS.paragraph}字以内）。図そのものの説明書ではなく、この作品でその図をどう読むとよいかを書く。書く図: ${figs.join(", ") || "なし（空配列にする）"}。図の意味: relations＝人物関係図（フェーズで関係が変わる）／reverse_plot＝結末から原因へさかのぼる木／matrix＝誰がどの秘密をいつ知っているか（読者の列を含む）。
+3. intros: ページごとに1ブロック。ページの導入。heading は null か全角${CARD_LIMITS.heading}字以内。paragraphs の1つ目＝そのページで何がわかるかを1文で（全角${CARD_LIMITS.lede}字以内）。必要なら段落をもう1つだけ足す（全角${CARD_LIMITS.paragraph}字以内）。書くページ: ${intros.join(", ") || "なし（空配列にする）"}。themes＝テーマ・批評／context＝文化的文脈／interpretations＝解釈の分岐。
+4. quiz: 下の各クイズ項目（quiz_id）について、問題・答え・解説を読者向けに整えて書き直す。因果・動機・反実仮想を問う形にし、固有名や数字を当てさせる暗記問題にしない。問題は全角${CARD_LIMITS.quizQuestion}字以内。答えは1文で全角${CARD_LIMITS.quizAnswer}字以内。解説は答えがなぜ導けるかを1〜2文で（全角${CARD_LIMITS.quizExplanation}字以内）。新しい quiz_id を作らない。
 
 # 要素（公開対象。ID で参照する）
 ${o.elements}
@@ -312,6 +342,7 @@ export function writeRevisePrompt(o: { title: string; units: ReviewUnitView[]; f
   return `作品『${o.title}』の作品ページ本文にレビューの指摘が付きました。各指摘に revised（直した）か declined（直さない。理由）で答えてください。
 
 - 直したブロックは updated に全項目を入れる（文章ブロックは paragraphs と heading、question/answer/explanation は null。クイズは question/answer/explanation を入れ、paragraphs は空配列、heading は null）。
+- 直すときもカードの形を保つ（paragraphs の1つ目はリード1文・全角${CARD_LIMITS.lede}字以内、続く段落は各全角${CARD_LIMITS.paragraph}字以内、見出しは全角${CARD_LIMITS.heading}字以内。クイズは問題・答え各全角${CARD_LIMITS.quizQuestion}字以内、解説1〜2文・全角${CARD_LIMITS.quizExplanation}字以内）。
 - 根拠の無い記述は削るか、根拠要素から言える範囲に弱める。ブロックごと不要なら removed_ids に ID を入れる。
 - 新しいブロック ID を作らない。
 
@@ -334,6 +365,7 @@ export function rewritePrompt(o: { title: string; units: { id: string; text: str
 - 一致した文は語順・語彙を変えて完全に言い換える。出典の言い回しを残さない。原作の台詞や文章も引用しない。
 - 書き直したブロックごとに units に入れる。文章ブロックは paragraphs に全段落を入れ、question/answer/explanation は null。クイズは question/answer/explanation を入れ、paragraphs は空配列。
 - 内容を増やさない。根拠の無いことを足さない。
+- 段落の数と役割を保つ（paragraphs の1つ目はリード1文・全角${CARD_LIMITS.lede}字以内、続く段落は各全角${CARD_LIMITS.paragraph}字以内）。
 
 ${WRITE_RULES}
 

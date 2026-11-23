@@ -79,7 +79,7 @@ function boxSvg(t: DesignTokens, g: TreeGeom, c: Cut, s: BoxSpec, depth: number,
   const meta = `<text class="fig-b__meta fig-b__meta--${c.node.epistemic.replace(/_/g, "-")}" x="${fmt(tx)}" y="${fmt(base(s.lines.length))}">${esc(s.meta)}</text>`;
   const more = s.more ? `<text class="fig-b__more" x="${fmt(tx)}" y="${fmt(base(s.lines.length + 1))}">${esc(s.more)}</text>` : "";
   const title = s.lines.join("") !== c.node.label ? `<title>${esc(c.node.label)}</title>` : "";
-  return `<g class="fig-b__node fig-b__node--${c.node.level}" data-id="${esc(c.node.id)}" data-depth="${depth}">${title}<rect x="${fmt(x0)}" y="${fmt(y0)}" width="${fmt(w)}" height="${fmt(s.h)}" rx="${fmt(t.radius)}"/>${label}${meta}${more}</g>`;
+  return `<g class="fig-b__node fig-b__node--${c.node.level}" data-id="${esc(c.node.id)}" data-depth="${depth}">${title}<rect x="${fmt(x0)}" y="${fmt(y0)}" width="${fmt(w)}" height="${fmt(s.h)}" rx="${fmt(Math.min(t.radius.control, s.h / 2))}"/>${label}${meta}${more}</g>`;
 }
 
 function svgOpen(wkey: string, wname: string, frame: number, W: number, H: number, orient: "tb" | "lr"): string {

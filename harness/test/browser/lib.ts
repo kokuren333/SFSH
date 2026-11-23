@@ -84,6 +84,16 @@ export async function open(page: Page, path: string): Promise<number> {
   return res?.status() ?? 0;
 }
 
+/**
+ * AMENDMENT 09: the card view is the primary figure presentation at every width; the SVG / table figure sits in
+ * `details.fig-more` ("図で見る"), shown from the tablet width (600) only. Figure tests of the full figure open it first.
+ */
+export const FULL_FIGURE_MIN = 600;
+export const FULL_WIDTHS = WIDTHS.filter((w) => w >= FULL_FIGURE_MIN);
+export async function openFull(page: Page): Promise<void> {
+  await page.evaluate(() => { for (const d of document.querySelectorAll<HTMLDetailsElement>('details.fig-more')) d.open = true; });
+}
+
 /** Open the narrow-width menu so that its nav links are measured too. */
 export async function openMobileMenu(page: Page): Promise<void> {
   await page.evaluate(() => { for (const d of document.querySelectorAll<HTMLDetailsElement>('details.mobile-menu')) d.open = true; });

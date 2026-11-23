@@ -4,7 +4,8 @@
  *    at the harness repository) and sets GIT_TERMINAL_PROMPT=0 (never wait for credentials);
  *  - runs with `-c core.autocrlf=false -c core.safecrlf=false` (blobs = dist bytes, so manifest hashes match);
  *  - prepends the caller's guard options (the protocol guard while the production gate is closed).
- * This module is the ONLY place in the harness that may run `git push` (see publishPushGuard test).
+ * `git push` runs only from publish/repo.ts (site snapshot) and publish/harnessExport.ts (public harness copy, M6),
+ * each to its own configured remote (see the push-guard test in publishRemote.test.ts).
  */
 import { spawnSync } from "node:child_process";
 

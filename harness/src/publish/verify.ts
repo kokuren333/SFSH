@@ -374,6 +374,11 @@ interface SecretHit {
   line: number | null;
 }
 
+/** Push-verification (c) rules over one text (M6: reused by `sfsh harness-publish` for the harness export scan). */
+export function scanSecretsText(text: string, allowEmails: string[] = []): SecretHit[] {
+  return scanSecrets(text, secretRules(allowEmails));
+}
+
 function scanSecrets(text: string, rules: SecretRule[]): SecretHit[] {
   const hits: SecretHit[] = [];
   const seen = new Set<string>();

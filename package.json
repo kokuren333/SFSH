@@ -2,7 +2,7 @@
   "name": "sfsh",
   "version": "0.0.1",
   "private": true,
-  "description": "SFSH (Super Fast Story Harness) — private local harness",
+  "description": "SFSH (Super Fast Story Harness) — locally run harness that researches stories and publishes a static story-analysis site",
   "type": "module",
   "bin": {
     "sfsh": "harness/bin/sfsh.js"

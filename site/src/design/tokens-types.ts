@@ -10,8 +10,11 @@ export type ColorRef = Hex | "bg" | "text" | "sub" | "accent";
 
 export interface DesignTokens {
   schema: "sfsh-tokens/1";
-  /** UI: achromatic 3 tones (bg / body text / rules+secondary text) + 1 accent. Light theme only (v1). */
-  color: { bg: Hex; text: Hex; sub: Hex; accent: Hex };
+  /**
+   * UI: achromatic tones + 1 accent. Light theme only. AMENDMENT 09 (ChatGPT / Apps SDK UI): bg = page,
+   * surface = chips / quiet panels, border = card outlines and dividers, text = body, sub = secondary text.
+   */
+  color: { bg: Hex; surface: Hex; border: Hex; text: Hex; sub: Hex; accent: Hex };
   semantic: {
     /** Epistemic classes (2.3): 4 colors + label + mark (never color alone). */
     epistemic: Record<"canon" | "consensus" | "fan_theory" | "sfsh_analysis", { color: Hex; label: string; mark: string }>;
@@ -32,8 +35,8 @@ export interface DesignTokens {
   };
   /** 8px base, 4px steps allowed. */
   space: { xs: number; s: number; m: number; l: number; xl: number; section: number };
-  /** Single corner radius ≤ 4. */
-  radius: number;
+  /** AMENDMENT 09: control (buttons, inputs, inner panels) ≤ card (cards) ≤ 24; pill = fully rounded chips. */
+  radius: { control: number; card: number; pill: number };
   /** Line widths for rules and figure strokes. */
   line: { hair: number; figure: number; strong: number };
   layout: { textMax: number; figureMax: number; tap: number; tapGap: number; sectionGap: number; figureGap: number; gutter: number };

@@ -10,3 +10,4 @@ export { renderRelations } from "./relations.ts";
 export { renderReversePlot } from "./reversePlot.ts";
 export { renderMatrix } from "./matrix.ts";
 export { renderTimeline } from "./timeline.ts";
+export { renderRelationsCards, renderReversePlotCards, renderMatrixCards, renderTimelineCards } from "./cards.ts";

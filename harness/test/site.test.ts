@@ -6,7 +6,7 @@ import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { acquireBuildLock, build, listFiles, rendererArgs, run } from '../src/site/build.ts';
-import { repoRoot, stageWorks } from '../src/site/stage.ts';
+import { loadSiteSettings, repoRoot, stageWorks } from '../src/site/stage.ts';
 import { startPreviewServer } from '../src/site/preview.ts';
 import { buildCommand, previewCommand } from '../src/commands/site.ts';
 import { buildSite } from '../../site/src/build.ts';
@@ -84,13 +84,16 @@ test('determinism: two fresh permission-limited builds have identical files and 
   assert.equal(await readFile(join(outA, '.nojekyll'), 'utf8'), '');
   assert.equal(await readFile(join(outA, 'robots.txt'), 'utf8'), 'User-agent: *\nAllow: /\n');
 });
-test('output has no external resources, images, iframe, CSS imports or CSS URLs; only bibliography links are external', async () => {
+test('output has no external resources, images, iframe, CSS imports or CSS URLs; only bibliography links (and the configured contact window) are external', async () => {
+  const contactUrl = (await loadSiteSettings()).contact.url;
   for (const path of renderedFiles) {
     let text = await readFile(join(outA, path), 'utf8');
     assert.doesNotMatch(text, /<img\b|<iframe\b/i, path);
     if (path.endsWith('/sources/index.html')) {
       text = text.replace(/<a href="https?:\/\/[^"<>]*" rel="nofollow noopener">https?:\/\/[^<>]*<\/a>/g, '');
     }
+    // After the opening (CP-048, U-10) the takedown page links the configured contact window (harness/config/site.json).
+    if (path === 'takedown/index.html' && contactUrl) text = text.split(`<a href="${contactUrl}" rel="noopener">${contactUrl}</a>`).join('');
     // Inline figure namespace declarations are allowed, never a resource request.
     text = text.replace(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, '');
     assert.doesNotMatch(text, /https?:\/\/|(?:["'(=\s])\/\/[a-z0-9]/i, path);
@@ -248,8 +251,10 @@ test('base URL opt-in generates absolute sitemap loc entries and preserves proje
 });
 test('CP-026: people/events pages are emitted only with content, reachable by plain links and breadcrumbs, and listed in the sitemap', async () => {
   const work = await readFile(join(outA, 'works/novel-akari-2020/index.html'), 'utf8');
-  assert.ok(work.includes('<a href="people/">人物と動機・変容</a>'));
-  assert.ok(work.includes('<a href="events/">出来事と因果・世界のルール・伏線</a>'));
+  // AMENDMENT 09: essence pages are cards at the top of the work page (title + description + count).
+  assert.match(work, /<a class="nav-card" href="people\/"><span class="nav-card__title">人物と動機・変容<\/span>/);
+  assert.match(work, /<a class="nav-card" href="events\/"><span class="nav-card__title">出来事と因果・世界のルール・伏線<\/span>/);
+  assert.ok(work.indexOf('class="nav-cards"') < work.indexOf('class="overview"'), 'essence cards come before the overview');
   for (const sub of ['people', 'events']) {
     const path = `works/novel-akari-2020/${sub}/index.html`;
     assert.ok(renderedFiles.includes(path), path);

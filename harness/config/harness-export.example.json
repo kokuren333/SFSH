@@ -1,0 +1,42 @@
+{
+  "license": "Apache-2.0",
+  "include": [
+    "harness/src/**",
+    "harness/test/**",
+    "harness/schema/**",
+    "harness/bin/**",
+    "harness/config/*.json",
+    "harness/probes/**",
+    "site/src/**",
+    "site/fixtures/**",
+    "site/tsconfig.client.json",
+    "design/REQUIREMENTS.md",
+    "design/RUNBOOK.md",
+    "design/SITE_OPENING.md",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "sfsh.cmd",
+    ".gitignore",
+    ".gitattributes"
+  ],
+  "exclude": [
+    "works/**",
+    "logs/**",
+    "queue/**",
+    "_handoff/**",
+    "BRIEF.md",
+    "publish/**",
+    "publish-test/**",
+    "site/dist/**",
+    "site/.input/**",
+    "site/.publish-stage/**",
+    ".env",
+    ".env.*",
+    "**/*.pem",
+    "**/*.key",
+    "secrets/**",
+    "node_modules/**"
+  ],
+  "add": ["LICENSE", "README.md"]
+}

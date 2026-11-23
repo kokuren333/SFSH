@@ -19,7 +19,7 @@ export async function buildSite(out: string, baseUrl?: string): Promise<number> 
   const page = (path: string, title: string, body: ReturnType<typeof html>, script?: string, usePhase = false) => {
     pages.push({ path, title }); write(path, layout(site, path, title, body, script, usePhase && phase));
   };
-  write('assets/site.css', tokensToCss(tokens) + readSource('styles/base.css') + readSource('styles/figures.css', true) + readSource('design/theme.css', true));
+  write('assets/site.css', tokensToCss(tokens) + readSource('styles/base.css') + readSource('styles/figures.css', true) + readSource('styles/cards.css', true) + readSource('design/theme.css', true));
   write('catalog.json', JSON.stringify(index.works, null, 2));
   write('robots.txt', 'User-agent: *\nAllow: /\n');
   write('.nojekyll', '');

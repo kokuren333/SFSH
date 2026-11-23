@@ -133,6 +133,36 @@ test("worker: priority high first, then received order; every received job is id
   for (const x of [a, b, c]) assert.equal(job(env, x.job_id).job.state, "built");
 });
 
+test("M6 boundary intake: a request received while a job runs is identified (and merged) at the next stage boundary, not after the job", async (t) => {
+  const { env, deps } = setup(t);
+  seedWork(env, W1);
+  seedWork(env, { work_id: "novel-b-2001", title: "作品B", medium: "novel" });
+  const a = submit(env, { work: "星降る灯台" }, 0);
+  let late: JobRequest | null = null;
+  let other: JobRequest | null = null;
+  let seenAtTags: string[] | null = null;
+  deps.stageOverrides!.fact = async (ctx) => {
+    if (ctx.jobId !== a.job_id) return okStage();
+    // arrives while job A is in its fact stage
+    late = submit(env, { work: "星降る灯台" }, 5);
+    other = submit(env, { work: "作品B" }, 6);
+    return okStage();
+  };
+  deps.stageOverrides!.tags = async (ctx) => {
+    if (ctx.jobId !== a.job_id) return okStage();
+    seenAtTags = [late!, other!].map((x) => job(env, x.job_id).job.state);
+    return okStage();
+  };
+  await runWorker(env, deps, { once: true });
+  // at A's tags stage (later than the boundary after fact) both were already identified: same key → merged into
+  // the running A; another work → queued (runs after A)
+  assert.deepEqual(seenAtTags, ["merged", "queued"]);
+  assert.equal(job(env, late!.job_id).job.merged_into, a.job_id);
+  assert.equal(job(env, a.job_id).job.state, "built");
+  assert.equal(job(env, other!.job_id).job.state, "built");
+  assert.match(jobLog(env, late!.job_id), /identified: novel-hoshifuru-toudai-2001/);
+});
+
 // ------------------------------------------------------------------ clarifying + answers
 
 test("clarifying: an unparsable range asks back without running identify; a range answer continues to built", async (t) => {

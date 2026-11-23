@@ -105,6 +105,12 @@ export interface RunnerDeps {
    * the run there; the state file is left resumable (stage records untouched, pid cleared). Used for cancel (§4.4).
    */
   shouldStop?: () => string | null;
+  /**
+   * M6 (CP-041 finding a): awaited at each stage boundary (before a stage that is not done yet, before shouldStop).
+   * The queue worker identifies newly received requests here so that clarifying / merge answers do not wait for
+   * the whole running job. Must not throw (errors are the caller's to log); it must not touch this job's state file.
+   */
+  atBoundary?: () => Promise<void>;
 }
 
 // ---------- state files ----------
@@ -216,6 +222,32 @@ function workBrief(workDir: string) {
   };
 }
 
+/**
+ * S3/S4 stages that only read existing research / NKG / projection outputs and never search or fetch
+ * (AMENDMENT 09: `sfsh regen` re-runs them for an existing work). The job runner and regen share these functions.
+ */
+export const OFFLINE_STAGES = ["write", "compose", "autocheck"] as const satisfies readonly StageName[];
+export type OfflineStageName = (typeof OFFLINE_STAGES)[number];
+
+export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Promise<StageResult> {
+  switch (name) {
+    case "write":
+      return async (ctx) => {
+        const r = await writePages(ctx);
+        try {
+          summarizeReviews(ctx.workDir, ctx.now()); // include gen/reviews/*.json in review_summary + work.json review_stats (3.3-4)
+        } catch (e) {
+          r.warnings.push(`review summary failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return r;
+      };
+    case "compose":
+      return composePublic;
+    case "autocheck":
+      return autoCheck;
+  }
+}
+
 const ROUND1_ASPECTS = ["bibliographic", "M01", "M03", "M02", "M06", "M07", "M10", "M12", "M05", "M08", "M09", "M04", "M11"];
 
 function defaultStage(name: Exclude<StageName, "identify">, st: JobState): (ctx: StageContext) => Promise<StageResult> {
@@ -246,19 +278,9 @@ function defaultStage(name: Exclude<StageName, "identify">, st: JobState): (ctx:
     case "project":
       return projectPublic;
     case "write":
-      return async (ctx) => {
-        const r = await writePages(ctx);
-        try {
-          summarizeReviews(ctx.workDir, ctx.now()); // include gen/reviews/*.json in review_summary + work.json review_stats (3.3-4)
-        } catch (e) {
-          r.warnings.push(`review summary failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
-        return r;
-      };
     case "compose":
-      return composePublic;
     case "autocheck":
-      return autoCheck;
+      return offlineStage(name);
   }
 }
 
@@ -370,6 +392,7 @@ export async function runJob(st: JobState, deps: RunnerDeps): Promise<JobState> 
     const rec = st.stages[name];
     if (rec.status === "done") continue;
     if (st.state === "clarifying") break;
+    if (deps.atBoundary) await deps.atBoundary();
     const stop = deps.shouldStop?.() ?? null;
     if (stop) {
       st.pid = null;

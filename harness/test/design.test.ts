@@ -40,8 +40,20 @@ test("token violations are detected", () => {
   t.font.lineHeight.body = 1.5;
   assert.ok(failed(t).includes("font.line_height_body"));
   t = base();
-  t.radius = 8;
-  assert.ok(failed(t).includes("radius.single_le_4"));
+  t.radius.card = 32;
+  assert.ok(failed(t).includes("radius.card_le_24"));
+  t = base();
+  t.radius.control = 20; // control > card
+  assert.ok(failed(t).includes("radius.card_le_24"));
+  t = base();
+  t.radius.pill = 8;
+  assert.ok(failed(t).includes("radius.pill"));
+  t = base();
+  t.color.surface = t.color.bg;
+  assert.ok(failed(t).includes("color.ui_tones_distinct"));
+  t = base();
+  t.color.surface = "#c8c8c8"; // too dark for a quiet panel
+  assert.ok(failed(t).includes("color.surface_border_quiet"));
   t = base();
   t.space.m = 18;
   assert.ok(failed(t).includes("space.4px_steps"));

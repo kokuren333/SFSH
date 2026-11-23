@@ -1,5 +1,7 @@
 # サイト開設手順書（GitHub Pages）
 
+> **実施済み（2026-11-23）**: 発注者の開設指示（10:19「両方開設して（サイト＋ハーネス）」）により、本書の手順で開設した（台帳 CP-048・049）。サイト `https://kokuren333.github.io/sfsh-site/`（リポジトリ `kokuren333/sfsh-site`、独自ドメインなし）、窓口 = sfsh-site の Issues、公開名「SFSH（仮称）」、`mode: auto`。以下は開設時の手順の記録として残す（作り直しや別アカウントでの開設のときに使う）。開設後の日常の運用は `design/RUNBOOK.md`、ハーネス公開は `design/HARNESS_PUBLISHING.md`。
+
 - 対象: SFSH の公開サイトを GitHub Pages で開設する手順（REQUIREMENTS v1.4 の 6.3-6・7.2 M5、U-05）。作成: オーケストレーター（M5、台帳 CP-046）。
 - **この手順は発注者（kokuren）の開設指示が出てから実行する。** 指示が出るまで、GitHub 上の作成・変更・push を伴う操作を一切しない（CP-041）。M5 の時点では手順 1〜6 のどれも実行していない。
 - 開設前の状態（M5 完了時点）: `harness/config/publish.json` の `production_enabled: false`（本番ゲートは閉）。`publish/` はローカルの試験用 bare（`publish-test/site.git`）を向いている。ハーネス側リポジトリに remote は無い（U-06）。

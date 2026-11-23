@@ -1,0 +1,85 @@
+/*
+ * Figure card views (site/src/figures/cards.ts, AMENDMENT 09). One card per person / cause / secret; deeper levels
+ * behind <details>; every row wraps — no horizontal scrolling and no scaled drawing at any width. Tokens only.
+ */
+.fc { margin-block: var(--space-l); }
+.fc > h2 { margin-block-start: 0; }
+.fc-lead { color: var(--color-sub); }
+.fc-list { display: grid; gap: var(--space-s); padding: 0; margin: var(--space-m) 0; list-style: none; }
+.fc-list > li { margin: 0; }
+.fc-card { display: block; padding: var(--space-m); border: var(--line-hair) solid var(--color-border); border-radius: var(--radius-card); background: var(--color-bg); }
+.fc-card > :first-child { margin-block-start: 0; }
+.fc-card > :last-child { margin-block-end: 0; }
+.fc-title { margin-block: 0 var(--space-xs); font-size: var(--fs-body); line-height: var(--lh-heading); }
+h2.fc-title { font-size: var(--fs-h2); }
+.fc-sub, .fc-eyebrow, .fc-meta, .fc-phase__label, .fc-rel__when { font-size: var(--fs-small); color: var(--color-sub); line-height: var(--lh-heading); }
+.fc-eyebrow { margin-block-end: var(--space-xs); font-weight: var(--fw-bold); }
+.fc-meta { margin-block-start: var(--space-s); }
+.fc-text { margin-block: var(--space-xs); }
+.fc-ep { font-weight: var(--fw-bold); }
+.fc-ep--canon .fc-ep__mark { color: var(--ep-canon); }
+.fc-ep--consensus .fc-ep__mark { color: var(--ep-consensus); }
+.fc-ep--fan-theory .fc-ep__mark { color: var(--ep-fan-theory); }
+.fc-ep--sfsh-analysis .fc-ep__mark { color: var(--ep-sfsh-analysis); }
+.fc-ep__mark { margin-inline-end: var(--space-xs); }
+.fc-analysis { margin-block: var(--space-s); padding: var(--space-s) var(--space-m); border-radius: var(--radius); background: var(--color-surface); }
+.fc-more-item { list-style: none; }
+.fc-more > summary, .fc-deeper > summary { width: fit-content; padding: var(--space-xs) var(--space-m); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: var(--fs-small); }
+.fc-more[open] > summary { margin-block-end: var(--space-s); }
+
+/* A: relations */
+.fc-rels { padding: 0; margin: var(--space-s) 0 0; list-style: none; }
+.fc-rels > li { margin: 0; }
+.fc-rel { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-s); padding-block: var(--space-s); border-block-start: var(--line-hair) solid var(--color-border); }
+.fc-rel__who { font-weight: var(--fw-bold); }
+.fc-rel__when { flex-basis: 100%; }
+.fc-val { display: inline-flex; align-items: center; gap: var(--space-xs); font-size: var(--fs-small); color: var(--color-sub); }
+.fc-val::before { content: ""; display: inline-block; width: var(--space-s); height: var(--space-s); border-radius: var(--radius-pill); background: currentColor; }
+.fc-val--positive::before { background: var(--val-positive); }
+.fc-val--negative::before { background: var(--val-negative); }
+.fc-val--ambivalent::before { background: var(--val-ambivalent); }
+.fc-val--neutral::before { background: var(--val-neutral); }
+
+/* B: reverse plot — a vertical stepper (left rail) */
+.fc-tree { margin-block: var(--space-l) var(--space-xl); }
+.fc-outcome { border-width: var(--line-figure); border-color: var(--color-text); }
+.fc-flow { margin-block: var(--space-m) var(--space-s); font-weight: var(--fw-bold); }
+.fc-steps { padding: 0; margin: 0; list-style: none; }
+.fc-steps > li { margin: 0; }
+.fc-step { position: relative; padding: var(--space-s) 0 var(--space-s) var(--space-l); border-inline-start: var(--line-figure) solid var(--color-border); }
+.fc-step::before { content: ""; position: absolute; inset-inline-start: calc(var(--space-xs) * -1 - var(--line-hair)); top: var(--space-m); width: var(--space-s); height: var(--space-s); border-radius: var(--radius-pill); background: var(--color-sub); }
+.fc-step--direct::before { background: var(--color-text); }
+.fc-step > .fc-title { margin-block-end: 0; }
+.fc-deeper { margin-block-start: var(--space-s); }
+.fc-deeper > .fc-steps { margin-block-start: var(--space-s); }
+
+/* C: matrix — per secret, per phase, grouped by state */
+.fc-phases { padding: 0; margin: var(--space-s) 0 0; list-style: none; }
+.fc-phases > li { margin: 0; }
+.fc-phase { padding-block: var(--space-s); border-block-start: var(--line-hair) solid var(--color-border); }
+.fc-phase__label { font-weight: var(--fw-bold); margin-block-end: var(--space-xs); }
+.fc-states { display: grid; gap: var(--space-xs); padding: 0; margin: 0; list-style: none; }
+.fc-states > li { margin: 0; }
+.fc-state { display: flex; flex-wrap: wrap; gap: 0 var(--space-s); }
+.fc-state__label { display: inline-flex; align-items: center; gap: var(--space-xs); min-width: fit-content; font-size: var(--fs-small); color: var(--color-sub); }
+.fc-ks { font-weight: var(--fw-bold); }
+.fc-ks--knows { color: var(--ks-knows); }
+.fc-ks--suspects { color: var(--ks-suspects); }
+.fc-ks--misbelieves { color: var(--ks-misbelieves); }
+.fc-ks--unknown { color: var(--ks-unknown); }
+.fc-state--knows .fc-state__label, .fc-state--misbelieves .fc-state__label { color: var(--color-text); }
+.fc-reader { font-weight: var(--fw-bold); }
+
+/* timeline */
+.fc-tl { padding: var(--space-s) var(--space-m); margin: var(--space-m) 0; list-style: none; }
+.fc-tl__item { display: flex; gap: var(--space-m); padding-block: var(--space-s); }
+.fc-tl__item + .fc-tl__item { margin: 0; border-block-start: var(--line-hair) solid var(--color-border); }
+.fc-tl__num { flex: none; min-width: var(--space-l); color: var(--color-sub); font-weight: var(--fw-bold); }
+.fc-tl__body { display: grid; }
+.fc-tl__when { font-size: var(--fs-small); color: var(--color-sub); }
+
+@media (min-width: 600px) {
+  .fc-relations .fc-list, .fc-matrix .fc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .fc-relations .fc-more-item, .fc-matrix .fc-more-item { grid-column: 1 / -1; }
+  .fc-relations .fc-more .fc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

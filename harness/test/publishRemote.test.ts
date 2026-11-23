@@ -41,16 +41,21 @@ async function expectRemoteBlock(env: KitEnv, re: RegExp, label: string): Promis
   console.log(`# ${label}: blocked — ${r.remote_check!.problems.join(" / ")}`);
 }
 
-test("committed publish.json: production gate closed, local test bare, auto mode", () => {
+test("committed publish.json (after the opening, CP-048): production gate open to kokuren333/sfsh-site, auto mode; the test bare stays local", () => {
   const cfg = loadPublishConfig(path.join(repoRoot, "harness", "config", "publish.json"));
-  assert.equal(cfg.production_enabled, false);
-  assert.equal(cfg.remote_url, null);
-  assert.equal(cfg.base_url, null);
+  assert.equal(cfg.production_enabled, true);
+  assert.equal(cfg.remote_url, "https://github.com/kokuren333/sfsh-site.git");
+  assert.equal(cfg.base_url, "https://kokuren333.github.io/sfsh-site/");
   assert.equal(cfg.mode, "auto");
   assert.equal(isNetworkUrl(cfg.test_remote_url), false);
   const t = resolveTarget(cfg, repoRoot);
-  assert.equal(t.kind, "test");
-  assert.deepEqual(t.gitGuard, PROTOCOL_GUARD);
+  assert.equal(t.kind, "production");
+  assert.equal(t.url, cfg.remote_url);
+  assert.equal(t.baseUrl, cfg.base_url);
+  // The same file with the gate closed resolves to the local test bare under the protocol guard (pre-opening shape).
+  const closed = resolveTarget({ ...cfg, production_enabled: false }, repoRoot);
+  assert.equal(closed.kind, "test");
+  assert.deepEqual(closed.gitGuard, PROTOCOL_GUARD);
   // The harness repository has no remote (U-06: local git only).
   assert.equal(gitOut(["remote"], { cwd: repoRoot }), "");
 });
@@ -182,7 +187,7 @@ test("gate open (production_enabled: true): remote_url required; the production 
   assert.equal(r.post_verify.url_note, "skipped: base_url is not set in harness/config/publish.json");
 });
 
-test("only harness/src/publish/repo.ts runs git push (no other code path can push)", () => {
+test("only harness/src/publish/repo.ts (site snapshot) and harnessExport.ts (public harness copy, M6) run git push", () => {
   const offenders: string[] = [];
   const walk = (d: string) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -197,5 +202,5 @@ test("only harness/src/publish/repo.ts runs git push (no other code path can pus
   };
   walk(path.join(repoRoot, "harness", "src"));
   walk(path.join(repoRoot, "site", "src"));
-  assert.deepEqual(offenders, ["harness/src/publish/repo.ts"]);
+  assert.deepEqual(offenders.sort(), ["harness/src/publish/harnessExport.ts", "harness/src/publish/repo.ts"]);
 });

@@ -36,17 +36,18 @@ function evidenceGrade(work: PublicWork, ids: string[]): Grade | undefined {
 }
 function block(b: TextBlock, tokens: DesignTokens, work: PublicWork): Raw {
   const grade = evidenceGrade(work, b.based_on);
-  return spoiler(b.spoiler, html`<section class="text-block" id="${b.id}">${b.heading ? html`<h2>${b.heading}</h2>` : null}${badge(b.epistemic, tokens)}<p class="evidence-grade">${grade ? html`根拠要素の信頼度: ${grade}` : html`信頼度: 未付与`}</p>${b.paragraphs.map(p => html`<p>${p}</p>`)}</section>`);
+  // AMENDMENT 09: a card — title, lede (first paragraph), body, then a quiet meta line (mark + label + grade).
+  return spoiler(b.spoiler, html`<section class="text-block" id="${b.id}">${b.heading ? html`<h2>${b.heading}</h2>` : null}${b.paragraphs.map((p, i) => html`<p${i === 0 && b.paragraphs.length > 1 ? html` class="lede"` : null}>${p}</p>`)}<div class="evidence-grade">${badge(b.epistemic, tokens)}<span class="evidence-grade__text">${grade ? html`根拠要素の信頼度: ${grade}` : html`信頼度: 未付与`}</span></div></section>`);
 }
 /** S2 analysis prose (CP-026): always labelled 「独自分析」 with the sfsh_analysis mark, never by color alone. */
 function analysisBlock(text: string | null, tokens: DesignTokens): Raw | null {
   return text ? html`<div class="analysis"><p class="analysis-label">${badge('sfsh_analysis', tokens)}</p><p>${text}</p></div>` : null;
 }
 function legend(tokens: DesignTokens): Raw {
-  return html`<section class="legend"><h2>認識区分の凡例</h2><ul>${(Object.keys(tokens.semantic.epistemic) as Epistemic[]).map(ep => html`<li>${badge(ep, tokens)}</li>`)}</ul></section>`;
+  return html`<details class="legend help"><summary>表示の見方（認識区分の凡例）</summary><ul class="legend__list">${(Object.keys(tokens.semantic.epistemic) as Epistemic[]).map(ep => html`<li>${badge(ep, tokens)}</li>`)}</ul><p>信頼度（A〜D）は、参照した出典の種類と数から計算した値です。A がもっとも根拠が強いことを表します。</p></details>`;
 }
 export function searchForm(prefix: string, id: string): Raw {
-  return html`<form class="search-form" action="${prefix}search/" method="get"><label for="${id}">作品を検索</label><div class="search-controls"><input id="${id}" name="q" type="search" autocomplete="off"><button type="submit">検索</button></div></form>`;
+  return html`<form class="search-form" action="${prefix}search/" method="get"><label for="${id}">作品を検索</label><div class="search-controls"><input id="${id}" name="q" type="search" autocomplete="off" aria-label="作品を検索"><button type="submit">検索</button></div></form>`;
 }
 /** Common pages (WP-5.4), linked from every footer. */
 export const commonPages = [
@@ -190,9 +191,61 @@ function eventsBody(work: PublicWork, tokens: DesignTokens): Raw {
   const beatSection = groups.length ? html`<section><h2>感情の起伏</h2>${groups.map(g => html`<h3>${g.label}</h3>${g.beats.map(b => element(b.spoiler, b.id, html`<h4>${b.label}</h4>${badge(b.epistemic, tokens, b.grade)}<p class="element-meta">感情: ${b.emotion} · ${intensity(b.intensity)}</p>${para(b.summary)}${refList('きっかけ', b.evoked_by.map(id => r.event(id)), b.spoiler)}`))}`)}</section>` : null;
   return html`<p class="page-lead">主な出来事のつながり（原因と結果）、物語世界のルール、伏線と回収、感情の起伏を一覧にします。場面の再現ではなく要約です。</p>${eventSection}${ruleSection}${setupSection}${beatSection}`;
 }
+/** AMENDMENT 09: the essence pages (story structure) lead the work page as cards; the rest follow as a compact list. */
+export const ESSENCE: Subpage[] = ['reverse-plot', 'relations', 'matrix', 'people', 'events', 'themes'];
+const SUBPAGE_DESC: Record<Subpage, string> = {
+  'reverse-plot': '結末から原因へさかのぼる',
+  relations: '誰と誰が、どう結びつき変わるか',
+  matrix: '誰が何を、いつ知っていたか',
+  people: '何を望み、どう変わったか',
+  events: '何が何を引き起こしたか',
+  themes: '作品の問いと評価',
+  context: 'なぜ有名なのか・受け止められ方',
+  interpretations: '読みが分かれる点',
+  quiz: '要点を確かめる問題',
+  sources: '参照した資料の一覧',
+};
+function subpageCount(work: PublicWork, k: Subpage): string | null {
+  const e = work.elements, v = work.viz;
+  const n = (xs: number[], labels: string[]) => xs.map((x, i) => (x ? `${labels[i]} ${x}` : null)).filter(Boolean).join(' · ') || null;
+  const nodes = (ns: PlotNode[]): number => ns.reduce((s, x) => s + 1 + nodes(x.children), 0);
+  switch (k) {
+    case 'reverse-plot': return n([v.reverse_plot.trees.length, nodes(v.reverse_plot.trees.flatMap(t => t.children))], ['結末', '原因']);
+    case 'relations': return n([v.relations.characters.length, v.relations.relations.length], ['人物', '関係']);
+    case 'matrix': return v.matrix ? n([v.matrix.secrets.length], ['秘密']) : null;
+    case 'people': return n([e.motives.length, e.arcs.length], ['動機', '変容']);
+    case 'events': return n([e.events.length, e.world_rules.length, e.setups.length], ['出来事', 'ルール', '伏線']);
+    case 'themes': return n([work.pages.themes.items.length], ['テーマ']);
+    case 'quiz': return n([work.pages.quiz.length], ['問']);
+    case 'sources': return n([work.sources.length], ['件']);
+    default: return null;
+  }
+}
+function navCard(work: PublicWork, k: Subpage, p: string): Raw {
+  const count = subpageCount(work, k);
+  return html`<li><a class="nav-card" href="${p}${k}/"><span class="nav-card__title">${subpages[k]}</span><span class="nav-card__desc">${SUBPAGE_DESC[k]}</span>${count ? html`<span class="nav-card__meta">${count}</span>` : null}</a></li>`;
+}
+function navRow(work: PublicWork, k: Subpage, p: string): Raw {
+  return html`<li><a class="nav-row" href="${p}${k}/"><span class="nav-row__title">${subpages[k]}</span><span class="nav-row__desc">${SUBPAGE_DESC[k]}</span></a></li>`;
+}
+const chip = (text: string, href?: string, sub?: string | null): Raw =>
+  href ? html`<li><a class="chip" href="${href}">${text}${sub ? html`<span class="chip__sub">${sub}</span>` : null}</a></li>` : html`<li><span class="chip chip--plain">${text}${sub ? html`<span class="chip__sub">${sub}</span>` : null}</span></li>`;
 export function workBody(work: PublicWork, index: SiteInputIndex, tokens: DesignTokens): Raw {
   const w = work.work;
-  return html`<p class="coverage">対象範囲: ${w.coverage_label} · ${spoilerLabel(w.spoiler_max)}</p><nav class="figure-entrances" aria-label="主要図"><a href="reverse-plot/">リバースプロットを見る</a><a href="relations/">人物関係図を見る</a></nav>${work.pages.overview.map(b => block(b, tokens, work))}${legend(tokens)}<section><h2>情報不足の観点</h2><ul>${work.gaps.map(g => html`<li>この観点は情報不足のため未掲載: ${g.aspect_label}</li>`)}</ul></section>${w.aliases_display.length ? html`<section><h2>別名</h2><ul>${w.aliases_display.map(a => html`<li>${a}</li>`)}</ul></section>` : null}<section><h2>作品情報</h2>${w.title_original ? html`<p>原題: ${w.title_original}</p>` : null}<ul class="metadata-links">${w.creators.map(c => html`<li><a href="../../creators/${creatorId(c.name)}/">${c.name}</a>${c.role ? html` (${c.role})` : null}</li>`)}${w.genres.map(g => html`<li><a href="../../genres/${g}/">${label(index, 'genres', g)}</a></li>`)}<li><a href="../../media/${w.medium}/">${label(index, 'media', w.medium)}</a></li></ul></section><nav class="subpage-links" aria-label="作品の分析">${(Object.keys(subpages) as Subpage[]).filter(k => hasSubpage(work, k)).map(k => html`<a href="${k}/">${subpages[k]}</a>`)}</nav><p>非公式・独自分析サイト</p>`;
+  const essence = ESSENCE.filter(k => hasSubpage(work, k));
+  const others = (Object.keys(subpages) as Subpage[]).filter(k => !ESSENCE.includes(k) && hasSubpage(work, k));
+  const head = html`<div class="work-head"><ul class="chips" aria-label="分類">${chip(label(index, 'media', w.medium), `../../media/${w.medium}/`)}${w.first_release_year ? chip(`${w.first_release_year}年`) : null}${w.genres.map(g => chip(label(index, 'genres', g), `../../genres/${g}/`))}</ul><p class="coverage">対象範囲: ${w.coverage_label} · ${spoilerLabel(w.spoiler_max)}</p></div>`;
+  const nav = html`<section class="essence" aria-labelledby="essence-h"><h2 id="essence-h">この作品の核心</h2><nav aria-label="作品の分析"><ul class="nav-cards">${essence.map(k => navCard(work, k, ''))}</ul></nav></section>`;
+  const facts: Raw[] = [];
+  if (w.title_original) facts.push(html`<div class="fact"><dt>原題</dt><dd>${w.title_original}</dd></div>`);
+  if (w.creators.length) facts.push(html`<div class="fact"><dt>スタッフ</dt><dd><ul class="chips">${w.creators.map(c => chip(c.name, `../../creators/${creatorId(c.name)}/`, c.role))}</ul></dd></div>`);
+  if (w.aliases_display.length) facts.push(html`<div class="fact"><dt>別名</dt><dd><ul class="chips">${w.aliases_display.map(a => chip(a))}</ul></dd></div>`);
+  if (w.tags.length) facts.push(html`<div class="fact"><dt>タグ</dt><dd><ul class="chips">${w.tags.map(t => chip(label(index, 'tags', t)))}</ul></dd></div>`);
+  if (w.publisher) facts.push(html`<div class="fact"><dt>発行・制作</dt><dd>${w.publisher}</dd></div>`);
+  const info = html`<section class="card work-info"><h2>作品情報</h2><dl class="facts">${facts}</dl></section>`;
+  const more = others.length ? html`<section class="more-pages" aria-labelledby="more-h"><h2 id="more-h">さらに読む</h2><ul class="nav-list" aria-label="そのほかのページ">${others.map(k => navRow(work, k, ''))}</ul></section>` : null;
+  const gaps = work.gaps.length ? html`<details class="help"><summary>情報不足で載せていない観点（${work.gaps.length}件）</summary><ul>${work.gaps.map(g => html`<li>この観点は情報不足のため未掲載: ${g.aspect_label}</li>`)}</ul></details>` : null;
+  return html`${head}${nav}<div class="overview">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
 }
 export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignTokens, module: FigureModule | null): Raw {
   const crumbs = html`<nav class="breadcrumbs" aria-label="パンくず"><a href="../../../">トップ</a> › <a href="../../../works/">作品索引</a> › <a href="../">${work.work.title}</a> › ${subpages[page]}</nav>`;
@@ -218,5 +271,7 @@ export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignToken
     const data = work.pages[page];
     body = html`${data.intro.map(b => block(b, tokens, work))}${data.items.map(i => spoiler(i.spoiler, html`<section><h2>${i.label}</h2>${badge(i.epistemic, tokens, i.grade)}${'question' in i ? html`<p>${i.question}</p><p>${i.tension}</p><p>${i.values.join('、')}</p>` : null}${i.summary ? html`<p>${i.summary}</p>` : null}${analysisBlock(i.analysis, tokens)}</section>`))}${page === 'context' ? work.pages.context.iconic.map(i => spoiler(i.spoiler, html`<section><h2>${i.label}</h2>${badge(i.epistemic, tokens, i.grade)}<p>${i.why_famous}</p>${analysisBlock(i.analysis, tokens)}</section>`)) : null}`;
   }
-  return html`${crumbs}<p>対象範囲: ${work.work.coverage_label} · ${spoilerLabel(work.work.spoiler_max)}</p>${body}${legend(tokens)}`;
+  const siblings = (Object.keys(subpages) as Subpage[]).filter(k => k !== page && hasSubpage(work, k));
+  const sib = html`<section class="sibling-pages" aria-labelledby="sib-h"><h2 id="sib-h">この作品のほかのページ</h2><nav aria-label="この作品のほかのページ"><ul class="chips">${chip('作品ページに戻る', '../')}${siblings.map(k => chip(subpages[k], `../${k}/`))}</ul></nav></section>`;
+  return html`${crumbs}<p class="coverage">対象範囲: ${work.work.coverage_label} · ${spoilerLabel(work.work.spoiler_max)}</p>${body}${sib}${legend(tokens)}`;
 }

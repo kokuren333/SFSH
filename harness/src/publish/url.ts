@@ -21,6 +21,14 @@ export interface UrlCheckOptions {
   /** Gate closed → only loopback hosts are allowed. */
   loopbackOnly?: boolean;
   fetchImpl?: typeof fetch;
+  /**
+   * M6 (CP-049 residual 2): wait for the Pages deployment before touching the canonical URLs. The deploy sentinel is
+   * release-manifest.json fetched with a cache-busting query (`?sfsh-deploy=<tag>-<n>`, a separate CDN cache key):
+   * until its sha256 equals the new manifest, the old site is still served and no canonical URL is requested — so the
+   * check itself can no longer make the CDN cache a pre-deploy 404 of a newly added file (seen at the opening: 2 of 76
+   * files stayed 404 for 20+ minutes). Shares timeoutMs with the file check.
+   */
+  deploySentinel?: { sha256: string; tag: string };
 }
 
 export function assertAllowedUrl(base: string, loopbackOnly: boolean): URL {
@@ -41,6 +49,30 @@ export interface UrlVerifyReport {
   missing: string[];
   attempts: number;
   elapsed_ms: number;
+  /** M6: deploy wait before the file check (null when no sentinel was given). */
+  deploy?: { ok: boolean; polls: number; waited_ms: number; last_status: number | null } | null;
+}
+
+/** Poll the cache-busted manifest until it is the new one (deployed) or the deadline passes. */
+export async function waitForDeploy(base: URL, sentinel: { sha256: string; tag: string }, f: typeof fetch, deadline: number, intervalMs: number): Promise<NonNullable<UrlVerifyReport["deploy"]>> {
+  const t0 = Date.now();
+  let polls = 0;
+  let last: number | null = null;
+  for (;;) {
+    polls++;
+    const u = new URL("release-manifest.json", base);
+    u.searchParams.set("sfsh-deploy", `${sentinel.tag}-${polls}`);
+    try {
+      const res = await f(u, { redirect: "manual", cache: "no-store" });
+      last = res.status;
+      const body = Buffer.from(await res.arrayBuffer());
+      if (res.status === 200 && sha256(body) === sentinel.sha256) return { ok: true, polls, waited_ms: Date.now() - t0, last_status: last };
+    } catch {
+      last = null;
+    }
+    if (Date.now() >= deadline) return { ok: false, polls, waited_ms: Date.now() - t0, last_status: last };
+    await sleep(Math.min(intervalMs, Math.max(0, deadline - Date.now())));
+  }
 }
 
 export async function verifyUrl(baseUrl: string, files: ManifestFile[], manifestSelf: { sha256: string } | null, opts: UrlCheckOptions = {}): Promise<UrlVerifyReport> {
@@ -49,7 +81,14 @@ export async function verifyUrl(baseUrl: string, files: ManifestFile[], manifest
   const t0 = Date.now();
   const all = [...files, ...(manifestSelf ? [{ path: "release-manifest.json", sha256: manifestSelf.sha256 }] : [])].filter((x) => !x.path.split("/").some((s) => s.startsWith(".")));
   let attempts = 0;
-  let last: UrlVerifyReport = { ok: false, base_url: base.href, checked: all.length, mismatched: [], missing: [], attempts: 0, elapsed_ms: 0 };
+  let deploy: UrlVerifyReport["deploy"] = null;
+  if (opts.deploySentinel) {
+    deploy = await waitForDeploy(base, opts.deploySentinel, f, t0 + (opts.timeoutMs ?? 0), opts.intervalMs ?? 15_000);
+    // Not deployed within the timeout: report without requesting the canonical URLs (they would only cache 404s).
+    if (!deploy.ok)
+      return { ok: false, base_url: base.href, checked: all.length, mismatched: [], missing: [`(deploy not observed: release-manifest.json is not the new one after ${deploy.polls} polls, last status ${deploy.last_status})`], attempts: 0, elapsed_ms: Date.now() - t0, deploy };
+  }
+  let last: UrlVerifyReport = { ok: false, base_url: base.href, checked: all.length, mismatched: [], missing: [], attempts: 0, elapsed_ms: 0, deploy };
   for (;;) {
     attempts++;
     const mismatched: string[] = [];
@@ -63,7 +102,7 @@ export async function verifyUrl(baseUrl: string, files: ManifestFile[], manifest
       }
       if (sha256(Buffer.from(await res.arrayBuffer())) !== file.sha256) mismatched.push(file.path);
     }
-    last = { ok: !mismatched.length && !missing.length, base_url: base.href, checked: all.length, mismatched, missing, attempts, elapsed_ms: Date.now() - t0 };
+    last = { ok: !mismatched.length && !missing.length, base_url: base.href, checked: all.length, mismatched, missing, attempts, elapsed_ms: Date.now() - t0, deploy };
     if (last.ok || Date.now() - t0 >= (opts.timeoutMs ?? 0)) return last;
     await sleep(opts.intervalMs ?? 15_000);
   }
