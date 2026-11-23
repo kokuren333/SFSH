@@ -1,0 +1,14 @@
+{
+  "haiku": [
+    "claude-haiku-5-5"
+  ],
+  "luna": [
+    "gpt-6.2-luna",
+    "gpt-6-luna"
+  ],
+  "adopted": {
+    "haiku": "claude-haiku-5-5",
+    "luna": "gpt-6-luna",
+    "probed_at": "2026-11-23T09:37:50+09:00"
+  }
+}

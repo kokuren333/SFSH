@@ -1,0 +1,43 @@
+{
+  "domains": [
+    { "domain": "mangamura.org", "reason": "manga piracy / raw uploads" },
+    { "domain": "manga-zip.is", "reason": "manga piracy / raw uploads" },
+    { "domain": "manga-zip.net", "reason": "manga piracy / raw uploads" },
+    { "domain": "rawkuma.com", "reason": "manga piracy / raw uploads" },
+    { "domain": "rawraw.io", "reason": "manga piracy / raw uploads" },
+    { "domain": "nyaa.si", "reason": "torrent index / original-work uploads" },
+    { "domain": "sukebei.nyaa.si", "reason": "torrent index / original-work uploads" },
+    { "domain": "9anime.to", "reason": "anime piracy" },
+    { "domain": "aniwave.to", "reason": "anime piracy" },
+    { "domain": "hianime.to", "reason": "anime piracy" },
+    { "domain": "uta-net.com", "reason": "original-work lyrics" },
+    { "domain": "j-lyric.net", "reason": "original-work lyrics" },
+    { "domain": "utaten.com", "reason": "original-work lyrics" },
+    { "domain": "kget.jp", "reason": "original-work lyrics" },
+    { "domain": "petitlyrics.com", "reason": "original-work lyrics" },
+    { "domain": "lyrical-nonsense.com", "reason": "original-work lyrics" },
+    { "domain": "opensubtitles.org", "reason": "original-work subtitle repository" },
+    { "domain": "opensubtitles.com", "reason": "original-work subtitle repository" },
+    { "domain": "subscene.com", "reason": "original-work subtitle repository" },
+    { "domain": "kitsunekko.net", "reason": "original-work subtitle/script repository" },
+    { "domain": "animelon.com", "reason": "original-work video/subtitles" },
+    { "domain": "imsdb.com", "reason": "original-work script repository" },
+    { "domain": "subslikescript.com", "reason": "original-work script repository" },
+    { "domain": "mega.nz", "reason": "file locker" },
+    { "domain": "mediafire.com", "reason": "file locker" },
+    { "domain": "rapidgator.net", "reason": "file locker" },
+    { "domain": "katfile.com", "reason": "file locker" },
+    { "domain": "uploadgig.com", "reason": "file locker" },
+    { "domain": "thepiratebay.org", "reason": "torrent index" },
+    { "domain": "1337x.to", "reason": "torrent index" },
+    { "domain": "archive.ph", "reason": "paywall bypass service" },
+    { "domain": "archive.today", "reason": "paywall bypass service" },
+    { "domain": "12ft.io", "reason": "paywall bypass service" }
+  ],
+  "patterns": [
+    { "pattern": "^https?://(?:[^/]+\\.)?aozora\\.gr\\.jp(?::\\d+)?/cards/[^/]+/files/", "reason": "original-work full-text body (bibliographic card pages remain allowed)" },
+    { "pattern": "^https?://(?:[^/]+\\.)?(?:manga[-_]?zip|rawkuma|rawraw|mangamura|13dl|dlraw|mangakakalot|manganato|9anime|aniwave|hianime)\\.[^/]+/", "reason": "manga/anime piracy or raw-upload site family" },
+    { "pattern": "^https?://(?:[^/]+\\.)?(?:opensubtitles|subscene|kitsunekko)\\.[^/]+/", "reason": "original-work subtitle/script repository family" },
+    { "pattern": "\\.torrent(?:[?#]|$)", "reason": "torrent download" }
+  ]
+}

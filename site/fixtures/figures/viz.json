@@ -1,0 +1,196 @@
+{
+  "_note": "Synthetic, fictional figure data for WP-2.3 tests (no real work). Shape = PublicWork.phases + PublicWork.viz.",
+  "phases": [
+    { "id": "ph1", "label": "序盤", "order": 1 },
+    { "id": "ph2", "label": "中盤", "order": 2 },
+    { "id": "ph3", "label": "終盤", "order": 3 }
+  ],
+  "viz": {
+    "relations": {
+      "characters": [
+        { "id": "c01", "label": "汐見カイ", "summary": "港湾組合の若い荷役頭。", "faction": "f_harbor", "prominence": 1, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "c02", "label": "灯野ミオ", "summary": "灯台を守る家の娘。", "faction": "f_light", "prominence": 2, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "c03", "label": "黒瀬ジン", "summary": "夜の港を仕切る男。", "faction": "f_smuggler", "prominence": 3, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "c04", "label": "白石サヤ", "summary": "組合の帳簿係。", "faction": "f_harbor", "prominence": 4, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "c05", "label": "鷹取ゲン", "summary": "町議会の議長。", "faction": "f_council", "prominence": 5, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "c06", "label": "朝霧リン", "summary": "灯台守見習い。", "faction": "f_light", "prominence": 6, "epistemic": "consensus", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "c07", "label": "柳ハルト", "summary": "ジンの右腕。", "faction": "f_smuggler", "prominence": 7, "epistemic": "canon", "grade": "B", "spoiler": "mid", "source_refs": [] },
+        { "id": "c08", "label": "風間トウコ", "summary": "議会の古株。", "faction": "f_council", "prominence": 8, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "c09", "label": "磯部ソウ", "summary": "老練な船大工。", "faction": "f_harbor", "prominence": 9, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "c10", "label": "宵宮アヤ", "summary": "流れ者の記者。", "faction": null, "prominence": 10, "epistemic": "fan_theory", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "c11", "label": "砂原テツ", "summary": "密輸団の運び屋。", "faction": "f_smuggler", "prominence": 11, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "c12", "label": "雲井ナギ", "summary": "議長付きの秘書。", "faction": "f_council", "prominence": 12, "epistemic": "sfsh_analysis", "grade": "C", "spoiler": "mid", "source_refs": [] },
+        { "id": "c13", "label": "渚ユウ", "summary": "リンの弟。", "faction": "f_light", "prominence": 13, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "c14", "label": "錨谷ゴロウ", "summary": "ソウの父で元漁師。", "faction": "f_harbor", "prominence": 14, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "c15", "label": "星野コハル", "summary": "港の食堂の看板娘。", "faction": null, "prominence": 15, "epistemic": "consensus", "grade": "D", "spoiler": "none", "source_refs": [] },
+        { "id": "c16", "label": "長い名前を持つ旅の測量技師エドワード", "summary": "町を測りに来た旅人。", "faction": null, "prominence": 16, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] }
+      ],
+      "factions": [
+        { "id": "f_council", "label": "町議会" },
+        { "id": "f_harbor", "label": "港湾組合" },
+        { "id": "f_light", "label": "灯台守の家" },
+        { "id": "f_smuggler", "label": "密輸団" }
+      ],
+      "relations": [
+        { "id": "r01", "from": "c01", "to": "c02", "kind": "幼なじみ", "valence": "positive", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "r02", "from": "c01", "to": "c03", "kind": "商売敵", "valence": "negative", "phase_from": "ph1", "phase_to": "ph1", "changed_by_label": null, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "r03", "from": "c01", "to": "c03", "kind": "共闘", "valence": "ambivalent", "phase_from": "ph2", "phase_to": null, "changed_by_label": "嵐の夜の救助", "epistemic": "canon", "grade": "A", "spoiler": "mid", "source_refs": [] },
+        { "id": "r04", "from": "c03", "to": "c07", "kind": "兄貴分", "valence": "positive", "phase_from": null, "phase_to": "ph2", "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r05", "from": "c07", "to": "c03", "kind": "裏切り", "valence": "negative", "phase_from": "ph3", "phase_to": null, "changed_by_label": "議会との密約", "epistemic": "consensus", "grade": "B", "spoiler": "ending", "source_refs": [] },
+        { "id": "r06", "from": "c05", "to": "c01", "kind": "監督", "valence": "neutral", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r07", "from": "c05", "to": "c08", "kind": "盟友", "valence": "positive", "phase_from": "ph1", "phase_to": "ph2", "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r08", "from": "c05", "to": "c08", "kind": "対立", "valence": "negative", "phase_from": "ph3", "phase_to": null, "changed_by_label": "不正の発覚", "epistemic": "canon", "grade": "B", "spoiler": "ending", "source_refs": [] },
+        { "id": "r09", "from": "c02", "to": "c06", "kind": "師弟", "valence": "positive", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "r10", "from": "c06", "to": "c13", "kind": "姉弟", "valence": "positive", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "A", "spoiler": "none", "source_refs": [] },
+        { "id": "r11", "from": "c04", "to": "c01", "kind": "補佐", "valence": "positive", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r12", "from": "c04", "to": "c09", "kind": "同僚", "valence": "neutral", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "r13", "from": "c09", "to": "c14", "kind": "父子", "valence": "positive", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r14", "from": "c10", "to": "c02", "kind": "情報提供", "valence": "ambivalent", "phase_from": "ph2", "phase_to": null, "changed_by_label": "古い記録簿の噂", "epistemic": "fan_theory", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "r15", "from": "c11", "to": "c03", "kind": "部下", "valence": "neutral", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "r16", "from": "c12", "to": "c05", "kind": "秘書", "valence": "neutral", "phase_from": null, "phase_to": "ph2", "changed_by_label": null, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "r17", "from": "c12", "to": "c03", "kind": "内通", "valence": "ambivalent", "phase_from": "ph2", "phase_to": null, "changed_by_label": "議長の失脚計画", "epistemic": "sfsh_analysis", "grade": "C", "spoiler": "mid", "source_refs": [] },
+        { "id": "r18", "from": "c15", "to": "c13", "kind": "友人", "valence": "positive", "phase_from": "ph1", "phase_to": null, "changed_by_label": null, "epistemic": "consensus", "grade": "D", "spoiler": "none", "source_refs": [] },
+        { "id": "r19", "from": "c16", "to": "c02", "kind": "測量の依頼", "valence": "neutral", "phase_from": "ph2", "phase_to": "ph3", "changed_by_label": null, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "r20", "from": "c08", "to": "c10", "kind": "監視", "valence": "negative", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r21", "from": "c14", "to": "c11", "kind": "借金取り", "valence": "negative", "phase_from": "ph1", "phase_to": "ph2", "changed_by_label": null, "epistemic": "canon", "grade": "C", "spoiler": "none", "source_refs": [] },
+        { "id": "r22", "from": "c13", "to": "c06", "kind": "尊敬", "valence": "positive", "phase_from": "ph3", "phase_to": null, "changed_by_label": "灯台の火を守った夜", "epistemic": "consensus", "grade": "B", "spoiler": "ending", "source_refs": [] },
+        { "id": "r23", "from": "c07", "to": "c11", "kind": "相棒", "valence": "positive", "phase_from": null, "phase_to": null, "changed_by_label": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "source_refs": [] },
+        { "id": "r24", "from": "c01", "to": "c10", "kind": "恋慕と不信の入り混じった複雑な感情", "valence": "ambivalent", "phase_from": "ph3", "phase_to": null, "changed_by_label": "記事の公開", "epistemic": "fan_theory", "grade": "D", "spoiler": "ending", "source_refs": [] }
+      ]
+    },
+    "reverse_plot": {
+      "trees": [
+        {
+          "id": "o1", "kind": "outcome", "level": "outcome", "factor_kind": null, "label": "港の封鎖が解かれる", "summary": "長く続いた封鎖が終わり、船が戻る。", "analysis": null, "epistemic": "canon", "grade": "A", "spoiler": "ending",
+          "children": [
+            {
+              "id": "d1", "kind": "why", "level": "direct", "factor_kind": "political", "label": "密輸団の拠点が明るみに出る", "summary": "倉庫の地下が公に調べられた。", "analysis": null, "epistemic": "canon", "grade": "A", "spoiler": "ending",
+              "children": [
+                { "id": "f1", "kind": "why", "level": "factor", "factor_kind": "chance", "label": "灯台の記録簿の発見", "summary": "嵐で崩れた壁から帳面が出た。", "analysis": null, "epistemic": "canon", "grade": "B", "spoiler": "mid",
+                  "children": [
+                    { "id": "rt1", "kind": "why", "level": "root", "factor_kind": "rule", "label": "灯台守が代々記録を残す慣習", "summary": "船の出入りを毎晩書き留める決まり。", "analysis": null, "epistemic": "consensus", "grade": "B", "spoiler": "none", "children": [] }
+                  ] },
+                { "id": "f2", "kind": "why", "level": "factor", "factor_kind": "social", "label": "組合内の不満の高まり", "summary": null, "analysis": null, "epistemic": "consensus", "grade": "C", "spoiler": "mid",
+                  "children": [
+                    { "id": "rt2", "kind": "why", "level": "root", "factor_kind": "chance", "label": "長年の不漁", "summary": "三年続いた不漁で町が疲れていた。", "analysis": null, "epistemic": "fan_theory", "grade": "C", "spoiler": "none", "children": [] }
+                  ] }
+              ]
+            },
+            {
+              "id": "d2", "kind": "why", "level": "direct", "factor_kind": "political", "label": "町議会の議決", "summary": "封鎖の解除が一票差で決まった。", "analysis": null, "epistemic": "canon", "grade": "A", "spoiler": "ending",
+              "children": [
+                { "id": "f3", "kind": "why", "level": "factor", "factor_kind": "psychological", "label": "議員の寝返り", "summary": "古株の議員が議長に背を向けた。", "analysis": "議長への個人的な失望が、派閥の利害より強く働いたと読める。", "epistemic": "sfsh_analysis", "grade": "C", "spoiler": "ending",
+                  "children": [
+                    { "id": "rt3", "kind": "why", "level": "root", "factor_kind": "political", "label": "旧来の派閥争い", "summary": null, "analysis": null, "epistemic": "consensus", "grade": "B", "spoiler": "none", "children": [] }
+                  ] },
+                { "id": "f4", "kind": "why", "level": "factor", "factor_kind": "social", "label": "住民の署名運動", "summary": "食堂から始まった署名が広がった。", "analysis": null, "epistemic": "canon", "grade": "B", "spoiler": "mid", "children": [] }
+              ]
+            },
+            { "id": "d3", "kind": "why", "level": "direct", "factor_kind": "chance", "label": "嵐による航路の変化", "summary": null, "analysis": null, "epistemic": "canon", "grade": "B", "spoiler": "mid", "children": [] }
+          ]
+        },
+        {
+          "id": "o2", "kind": "outcome", "level": "outcome", "factor_kind": null, "label": "カイとジンの和解", "summary": "二人は港の再建で手を組む。", "analysis": null, "epistemic": "consensus", "grade": "B", "spoiler": "ending",
+          "children": [
+            {
+              "id": "d4", "kind": "why", "level": "direct", "factor_kind": "political", "label": "共通の敵の出現", "summary": "議会の一部が双方を陥れようとした。", "analysis": null, "epistemic": "canon", "grade": "B", "spoiler": "ending",
+              "children": [
+                { "id": "f5", "kind": "why", "level": "factor", "factor_kind": "political", "label": "議会の不正", "summary": "封鎖の裏で利益を得る者がいた。", "analysis": null, "epistemic": "canon", "grade": "B", "spoiler": "ending",
+                  "children": [
+                    { "id": "rt4", "kind": "why", "level": "root", "factor_kind": "rule", "label": "港の利権構造", "summary": "荷の許可を議会だけが出せる仕組み。", "analysis": null, "epistemic": "sfsh_analysis", "grade": "C", "spoiler": "none", "children": [] }
+                  ] },
+                { "id": "f6", "kind": "why", "level": "factor", "factor_kind": "psychological", "label": "幼い頃の恩", "summary": "ジンは昔カイの父に救われていた。", "analysis": null, "epistemic": "fan_theory", "grade": "D", "spoiler": "mid", "children": [] }
+              ]
+            },
+            {
+              "id": "d5", "kind": "why", "level": "direct", "factor_kind": "psychological", "label": "ミオの仲裁", "summary": "灯台で二人を引き合わせた。", "analysis": null, "epistemic": "canon", "grade": "A", "spoiler": "ending",
+              "children": [
+                { "id": "f7", "kind": "why", "level": "factor", "factor_kind": "rule", "label": "灯台守の中立の掟", "summary": "灯台の中では争わないという決まり。", "analysis": null, "epistemic": "canon", "grade": "B", "spoiler": "none", "children": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "matrix": {
+      "secrets": [
+        { "id": "s1", "label": "倉庫の地下の抜け道", "epistemic": "canon", "grade": "A", "spoiler": "mid" },
+        { "id": "s2", "label": "議長の裏帳簿", "epistemic": "canon", "grade": "A", "spoiler": "ending" },
+        { "id": "s3", "label": "ジンとカイの父の過去", "epistemic": "consensus", "grade": "B", "spoiler": "mid" },
+        { "id": "s4", "label": "記録簿の隠し場所", "epistemic": "canon", "grade": "B", "spoiler": "mid" },
+        { "id": "s5", "label": "ハルトの密約", "epistemic": "fan_theory", "grade": "C", "spoiler": "ending" }
+      ],
+      "holders": [
+        { "id": "c01", "label": "汐見カイ", "is_audience": false },
+        { "id": "c02", "label": "灯野ミオ", "is_audience": false },
+        { "id": "c03", "label": "黒瀬ジン", "is_audience": false },
+        { "id": "c04", "label": "白石サヤ", "is_audience": false },
+        { "id": "c05", "label": "鷹取ゲン", "is_audience": false },
+        { "id": "c06", "label": "朝霧リン", "is_audience": false },
+        { "id": "c07", "label": "柳ハルト", "is_audience": false },
+        { "id": "c08", "label": "風間トウコ", "is_audience": false },
+        { "id": "c10", "label": "宵宮アヤ", "is_audience": false },
+        { "id": "c12", "label": "雲井ナギ", "is_audience": false },
+        { "id": "c13", "label": "渚ユウ", "is_audience": false },
+        { "id": "audience", "label": "読者", "is_audience": true }
+      ],
+      "cells": [
+        { "secret": "s1", "holder": "c03", "phase": "ph1", "state": "knows" },
+        { "secret": "s1", "holder": "c07", "phase": "ph1", "state": "knows" },
+        { "secret": "s1", "holder": "c01", "phase": "ph1", "state": "unknown" },
+        { "secret": "s1", "holder": "audience", "phase": "ph1", "state": "suspects" },
+        { "secret": "s1", "holder": "c03", "phase": "ph2", "state": "knows" },
+        { "secret": "s1", "holder": "c07", "phase": "ph2", "state": "knows" },
+        { "secret": "s1", "holder": "c01", "phase": "ph2", "state": "suspects" },
+        { "secret": "s1", "holder": "audience", "phase": "ph2", "state": "knows" },
+        { "secret": "s1", "holder": "c01", "phase": "ph3", "state": "knows" },
+        { "secret": "s1", "holder": "c05", "phase": "ph3", "state": "knows" },
+        { "secret": "s1", "holder": "audience", "phase": "ph3", "state": "knows" },
+        { "secret": "s2", "holder": "c05", "phase": "ph1", "state": "knows" },
+        { "secret": "s2", "holder": "c12", "phase": "ph1", "state": "knows" },
+        { "secret": "s2", "holder": "c08", "phase": "ph1", "state": "misbelieves" },
+        { "secret": "s2", "holder": "audience", "phase": "ph1", "state": "unknown" },
+        { "secret": "s2", "holder": "c08", "phase": "ph2", "state": "suspects" },
+        { "secret": "s2", "holder": "c10", "phase": "ph2", "state": "suspects" },
+        { "secret": "s2", "holder": "audience", "phase": "ph2", "state": "suspects" },
+        { "secret": "s2", "holder": "c08", "phase": "ph3", "state": "knows" },
+        { "secret": "s2", "holder": "c10", "phase": "ph3", "state": "knows" },
+        { "secret": "s2", "holder": "c01", "phase": "ph3", "state": "knows" },
+        { "secret": "s2", "holder": "audience", "phase": "ph3", "state": "knows" },
+        { "secret": "s3", "holder": "c03", "phase": "ph1", "state": "knows" },
+        { "secret": "s3", "holder": "c01", "phase": "ph1", "state": "unknown" },
+        { "secret": "s3", "holder": "audience", "phase": "ph1", "state": "unknown" },
+        { "secret": "s3", "holder": "c02", "phase": "ph2", "state": "suspects" },
+        { "secret": "s3", "holder": "audience", "phase": "ph2", "state": "suspects" },
+        { "secret": "s3", "holder": "c01", "phase": "ph3", "state": "knows" },
+        { "secret": "s3", "holder": "audience", "phase": "ph3", "state": "knows" },
+        { "secret": "s4", "holder": "c02", "phase": "ph1", "state": "knows" },
+        { "secret": "s4", "holder": "c06", "phase": "ph1", "state": "unknown" },
+        { "secret": "s4", "holder": "c13", "phase": "ph1", "state": "misbelieves" },
+        { "secret": "s4", "holder": "audience", "phase": "ph1", "state": "knows" },
+        { "secret": "s4", "holder": "c06", "phase": "ph2", "state": "knows" },
+        { "secret": "s4", "holder": "c10", "phase": "ph2", "state": "suspects" },
+        { "secret": "s4", "holder": "c13", "phase": "ph3", "state": "knows" },
+        { "secret": "s4", "holder": "audience", "phase": "ph3", "state": "knows" },
+        { "secret": "s5", "holder": "c07", "phase": "ph2", "state": "knows" },
+        { "secret": "s5", "holder": "c12", "phase": "ph2", "state": "knows" },
+        { "secret": "s5", "holder": "c03", "phase": "ph2", "state": "misbelieves" },
+        { "secret": "s5", "holder": "audience", "phase": "ph2", "state": "unknown" },
+        { "secret": "s5", "holder": "c03", "phase": "ph3", "state": "knows" },
+        { "secret": "s5", "holder": "c04", "phase": "ph3", "state": "suspects" },
+        { "secret": "s5", "holder": "audience", "phase": "ph3", "state": "knows" }
+      ]
+    },
+    "timeline": {
+      "events": [
+        { "id": "e1", "label": "カイの父が海で消える", "story_order": 1, "disclosure_phase": "ph3", "spoiler": "ending" },
+        { "id": "e2", "label": "港が封鎖される", "story_order": 2, "disclosure_phase": "ph1", "spoiler": "none" },
+        { "id": "e3", "label": "記者アヤが町に来る", "story_order": 3, "disclosure_phase": "ph1", "spoiler": "none" },
+        { "id": "e4", "label": "嵐の夜の救助", "story_order": 4, "disclosure_phase": "ph2", "spoiler": "mid" },
+        { "id": "e5", "label": "記録簿が見つかる", "story_order": 5, "disclosure_phase": "ph2", "spoiler": "mid" },
+        { "id": "e6", "label": "議会の採決", "story_order": 6, "disclosure_phase": "ph3", "spoiler": "ending" },
+        { "id": "e7", "label": "灯台での会談", "story_order": 7, "disclosure_phase": null, "spoiler": "ending" }
+      ]
+    }
+  }
+}

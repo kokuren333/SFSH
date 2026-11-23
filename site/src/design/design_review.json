@@ -1,0 +1,191 @@
+{
+  "artifact": "site design (site/src/design/tokens.json + theme.css)",
+  "authored_by": "haiku",
+  "reviewed_by": "luna",
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "round": 1,
+      "findings": [
+        {
+          "target": "tokens.semantic.epistemic.canon.color",
+          "type": "violates_rule",
+          "severity": "high",
+          "evidence": "#1a1a1a is achromatic, so the four recognition classes do not have four distinct chromatic colors; this is also the named failed machine check.",
+          "finding_id": "r1f01"
+        },
+        {
+          "target": "tokens.semantic.know_state",
+          "type": "violates_rule",
+          "severity": "high",
+          "evidence": "Its states use brown and red semantic colors beyond the allowed recognition-class and relationship-polarity colors.",
+          "finding_id": "r1f02"
+        }
+      ],
+      "responses": [
+        {
+          "finding_id": "r1f01",
+          "action": "revised",
+          "reason": "canon の色を無彩色 #1a1a1a から有彩色の青 #1f4e9c に変更し、認識区分4色（青・緑・茶・マゼンタ）をすべて有彩色かつ相互に区別可能にした。機械検査の失敗項目 color.epistemic_4_chromatic_distinct を解消する。canon はアクセント色と同じ青を使うが、ラベル「確定設定」と記号「■」で区別でき、同一画面の有彩色は青・緑・茶・マゼンタ・赤の5色に収まる（上限6色以内）。"
+        },
+        {
+          "finding_id": "r1f02",
+          "action": "revised",
+          "reason": "know_state の4状態から有彩色（茶・赤）を外し、本文色と補助色の無彩色（text / sub）だけで表すように変更した。状態の区別はラベルと記号（－ ？ × ●）で担保する。意味色は認識区分4色と極性2色に限るという基準に合わせた。"
+        }
+      ],
+      "machine_ok_before": false,
+      "machine_ok_after": true
+    },
+    {
+      "round": 2,
+      "findings": [
+        {
+          "target": "tokens.semantic.valence",
+          "type": "inconsistent",
+          "severity": "medium",
+          "evidence": "基準の関係極性は友好・敵対の2色と中立の無彩色ですが、両義にも独立した破線区分が定義されています。",
+          "finding_id": "r2f01"
+        },
+        {
+          "target": "tokens.semantic.know_state",
+          "type": "inconsistent",
+          "severity": "medium",
+          "evidence": "知識状態は色に加えて記号かラベルを併用する基準ですが、誤解と既知が同じ本文色で区別され、図側でのラベル併用が保証されていません。",
+          "finding_id": "r2f02"
+        },
+        {
+          "target": "theme.css",
+          "type": "missing_style",
+          "severity": "medium",
+          "evidence": "クラス一覧にある ep-canon、ep-consensus、ep-fan_theory、evidence-grade、legend、spoiler-label、ref-group、ref-list、fig-b__analysis-label などの意味色・可読性スタイルが見当たりません。意味区分や参照群が未定義の見た目となり、一覧性を損なうおそれがあります。",
+          "finding_id": "r2f03"
+        },
+        {
+          "target": "theme.css:button, input, select",
+          "type": "violates_rule",
+          "severity": "high",
+          "evidence": "補助文字・UI文字のコントラスト4.5:1以上が必要ですが、枠線と文字色が #5f5f5f の入力欄に白背景を指定するなど、コントラスト基準を満たさない組み合わせがあります。",
+          "finding_id": "r2f04"
+        }
+      ],
+      "responses": [
+        {
+          "finding_id": "r2f01",
+          "action": "declined",
+          "reason": "両義（ambivalent）は無彩色の text で、中立（neutral）も無彩色の sub。2色の極性色（友好・敵対）とは別に、無彩色同士を線種だけで区別する必要がある。線種は「色に頼らない」基準で認められた併用手段で、破線を外すと両義と中立が同じ見た目になるため、現行の線種（2 3 / 12 4 2 4）を維持する。極性色は友好・敵対の2色のみで、基準どおり。"
+        },
+        {
+          "finding_id": "r2f02",
+          "action": "declined",
+          "reason": "知識状態は色だけで区別していない。4状態の記号（－ ？ × ●）とラベルは固定値で、凡例（fig-legend）は図の直前に常設され、各記号に role=img と aria-label、可視のラベル文字を持つ（figure C の実HTMLで確認）。無彩色の3階調という基準の制約で、4状態すべてを色で分けることもできない。誤解と既知の本文色が同じでも、記号とラベルで判別できる。"
+        },
+        {
+          "finding_id": "r2f03",
+          "action": "revised",
+          "reason": "ep-canon/consensus/fan_theory/sfsh_analysis は base.css で色が定義済みのため、theme_css で太字（fw-bold）を追加して色以外でも識別できるようにした。evidence-grade と element-meta は既存ルールがある。spoiler-label（本文色・太字）、legend（小さい文字・本文色）、ref-group / ref-list（本文色）、fig-b__analysis（本文色）、fig-b__analysis-label（独自分析の意味色・太字）を追加。装飾は足さず、既存の変数だけを使った。"
+        },
+        {
+          "finding_id": "r2f04",
+          "action": "declined",
+          "reason": "指摘の組み合わせは文字色ではなく罫線色（枠線）に使われている。計算した比は次のとおり。本文 #1a1a1a / 白 ≈ 17.4:1、補助文字・枠線 #5f5f5f / 白 ≈ 6.4:1（文字は4.5:1以上、枠線は3:1以上を満たす）、アクセント #1f4e9c / 白 ≈ 8.0:1、ボタン内の白文字 / アクセント ≈ 8.0:1、敵対色 #a4262c / 白 ≈ 7.3:1。基準を下回る文字の組み合わせは見つからなかったため、値は変更しない。"
+        }
+      ],
+      "machine_ok_before": true,
+      "machine_ok_after": true
+    }
+  ],
+  "repairs": [],
+  "structure_retries": [
+    {
+      "task": "design.generate",
+      "attempt": 1,
+      "problems": [
+        "tokens must have required property 'font' {\"missingProperty\":\"font\"}",
+        "tokens must have required property 'space' {\"missingProperty\":\"space\"}",
+        "tokens must have required property 'radius' {\"missingProperty\":\"radius\"}",
+        "tokens must have required property 'line' {\"missingProperty\":\"line\"}",
+        "tokens must have required property 'layout' {\"missingProperty\":\"layout\"}",
+        "tokens must have required property 'breakpoint' {\"missingProperty\":\"breakpoint\"}",
+        "tokens must have required property 'motion' {\"missingProperty\":\"motion\"}"
+      ]
+    },
+    {
+      "task": "design.revise",
+      "attempt": 1,
+      "note": "tokens_json was a partial patch; deep-merged over the previous Haiku tokens"
+    },
+    {
+      "task": "design.revise",
+      "attempt": 1,
+      "note": "tokens_json was a partial patch; deep-merged over the previous Haiku tokens"
+    }
+  ],
+  "target_status": {
+    "tokens.semantic.epistemic.canon.color": "revised",
+    "tokens.semantic.know_state": "disputed",
+    "tokens.semantic.valence": "disputed",
+    "theme.css": "revised",
+    "theme.css:button, input, select": "disputed"
+  },
+  "counts": {
+    "findings": 6,
+    "revised": 2,
+    "disputed": 3,
+    "rounds": 2
+  },
+  "machine_check_final": {
+    "ok": true,
+    "token_failures": [],
+    "css_issues": []
+  },
+  "rationale": "色は無彩色3階調（背景#ffffff・本文#1a1a1a・補助#5f5f5f）＋アクセント青#1f4e9c 1色。意味色は凡例用の4色と極性2色に限り、同時に出る有彩色は5色以下。本文は17:1、補助文字・意味色は6.4〜8:1で4.5:1以上。色だけに頼らずラベル・記号・線種を併用。本文16px・行間1.75、本文カラム672px（左右16px、内側640px＝全角40字）。余白は8px基準、節間48px、図と本文24px。装飾（影・グラデーション・角丸4px超）は使わず、区切りは余白と細罫で行う。動きは200ms。",
+  "calls": [
+    {
+      "task": "design.generate",
+      "modelId": "claude-haiku-5-5",
+      "reportedModelId": "claude-haiku-5-5",
+      "durationMs": 50646,
+      "costUsd": 0.01065365
+    },
+    {
+      "task": "design.generate",
+      "modelId": "claude-haiku-5-5",
+      "reportedModelId": "claude-haiku-5-5",
+      "durationMs": 63261,
+      "costUsd": 0.012403649999999999
+    },
+    {
+      "task": "design.review",
+      "modelId": "gpt-6-luna",
+      "reportedModelId": null,
+      "durationMs": 12269,
+      "costUsd": null
+    },
+    {
+      "task": "design.revise",
+      "modelId": "claude-haiku-5-5",
+      "reportedModelId": "claude-haiku-5-5",
+      "durationMs": 24391,
+      "costUsd": 0.008215130000000001
+    },
+    {
+      "task": "design.review",
+      "modelId": "gpt-6-luna",
+      "reportedModelId": null,
+      "durationMs": 9363,
+      "costUsd": null
+    },
+    {
+      "task": "design.revise",
+      "modelId": "claude-haiku-5-5",
+      "reportedModelId": "claude-haiku-5-5",
+      "durationMs": 45268,
+      "costUsd": 0.01063203
+    }
+  ],
+  "output_hashes": {
+    "tokens": "615a328b7f28d794a421653e91642f4755d1572b7a51810fe34b1b6e90250268",
+    "theme_css": "08a5244428adbfa22a08f0a830c7523959118a5982fe46a5bba558ed1a66fe5e"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "note": "REQUIREMENTS §2.5 initial values. add = genre-selectable modules switched on; weights = additive deltas on base_weight (combined across genres by taking the max delta per module); hints are passed to S2 prompts.",
+  "always_on": ["M01", "M02", "M03", "M06", "M07", "M10", "M12"],
+  "selectable": ["M04", "M05", "M08", "M09", "M11"],
+  "base_weight": 1.0,
+  "sufficiency_min_claims": 3,
+  "profiles": {
+    "mystery":         { "add": ["M05", "M04", "M09"], "weights": { "M03": 0.2 }, "hints": {} },
+    "suspense":        { "add": ["M05", "M04", "M09"], "weights": { "M06": 0.1 }, "hints": {} },
+    "political":       { "add": ["M05", "M04", "M09", "M08"], "weights": { "M01": 0.3, "M02": 0.2 }, "hints": { "faction_emphasis": true } },
+    "romance":         { "add": ["M11"], "weights": { "M06": 0.3, "M01": 0.3 }, "hints": {} },
+    "human_drama":     { "add": ["M11"], "weights": { "M06": 0.3, "M01": 0.3, "M07": 0.2 }, "hints": {} },
+    "battle":          { "add": ["M08"], "weights": { "M01": 0.2 }, "hints": { "faction_emphasis": true } },
+    "fantasy":         { "add": ["M08"], "weights": { "M01": 0.2 }, "hints": { "faction_emphasis": true } },
+    "sf":              { "add": ["M08"], "weights": { "M10": 0.2 }, "hints": { "faction_emphasis": true } },
+    "dark_fantasy":    { "add": ["M08", "M11"], "weights": { "M10": 0.2 }, "hints": { "faction_emphasis": true } },
+    "narrative_trick": { "add": ["M04", "M05", "M09"], "weights": { "M03": 0.2 }, "hints": {} },
+    "ensemble":        { "add": [], "weights": { "M01": 0.3 }, "hints": { "prefer_more_phases": true } },
+    "historical":      { "add": ["M08"], "weights": { "M12": 0.3, "M01": 0.2 }, "hints": { "faction_emphasis": true } },
+    "coming_of_age":   { "add": ["M11"], "weights": { "M07": 0.3 }, "hints": {} },
+    "horror":          { "add": ["M11", "M09"], "weights": { "M06": 0.1 }, "hints": {} },
+    "comedy":          { "add": ["M11"], "weights": { "M01": 0.1 }, "hints": {} },
+    "slice_of_life":   { "add": ["M11"], "weights": { "M07": 0.1 }, "hints": {} },
+    "sports":          { "add": ["M11"], "weights": { "M07": 0.2 }, "hints": {} },
+    "war":             { "add": ["M08"], "weights": { "M01": 0.2, "M12": 0.2 }, "hints": { "faction_emphasis": true } }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "schema": "sfsh-public/1",
+  "work": {
+    "work_id": "anime-kumo-2021",
+    "title": "クラウド工房",
+    "title_original": null,
+    "title_reading": "くもこうぼう",
+    "aliases_display": [
+      "雲の工房"
+    ],
+    "medium": "anime",
+    "creators": [
+      {
+        "name": "架空 空",
+        "role": "監督"
+      }
+    ],
+    "genres": [
+      "sf",
+      "coming_of_age"
+    ],
+    "tags": [],
+    "status": "ongoing",
+    "first_release_year": 2021,
+    "publisher": null,
+    "coverage_label": "第1期",
+    "spoiler_max": "mid",
+    "has_matrix": false,
+    "first_published_at": "2026-02-01T00:00:00Z",
+    "updated_at": "2026-02-02T00:00:00Z"
+  },
+  "phases": [
+    {
+      "id": "ph1",
+      "label": "試作",
+      "order": 1
+    },
+    {
+      "id": "ph2",
+      "label": "共同制作",
+      "order": 2
+    }
+  ],
+  "viz": {
+    "relations": {
+      "characters": [],
+      "relations": [],
+      "factions": []
+    },
+    "reverse_plot": {
+      "trees": []
+    },
+    "matrix": null,
+    "timeline": null
+  },
+  "pages": {
+    "overview": [
+      {
+        "id": "b1",
+        "heading": "空をつくる",
+        "paragraphs": [
+          "雲を設計する工房で、若い技師たちが協働する架空の物語です。"
+        ],
+        "spoiler": "none",
+        "based_on": [],
+        "epistemic": "sfsh_analysis"
+      }
+    ],
+    "figure_notes": {
+      "relations": null,
+      "reverse_plot": null,
+      "matrix": null
+    },
+    "themes": {
+      "intro": [],
+      "items": []
+    },
+    "context": {
+      "intro": [],
+      "items": [],
+      "iconic": []
+    },
+    "interpretations": {
+      "intro": [],
+      "items": []
+    },
+    "quiz": []
+  },
+  "elements": {
+    "events": [],
+    "motives": [],
+    "arcs": [],
+    "world_rules": [],
+    "setups": [],
+    "emotion_beats": []
+  },
+  "gaps": [
+    {
+      "module": "M05",
+      "aspect_label": "秘密の共有",
+      "reason": "insufficient_sources"
+    }
+  ],
+  "sources": []
+}

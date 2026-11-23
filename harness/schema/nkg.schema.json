@@ -1,0 +1,2048 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sfsh.local/schema/nkg.schema.json",
+  "title": "SFSH Narrative Knowledge Graph",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work",
+    "sources",
+    "nodes",
+    "edges",
+    "gaps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "work": {
+      "$ref": "#/definitions/work"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/source"
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/node"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/edge"
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/gap"
+      }
+    }
+  },
+  "definitions": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+    },
+    "phase_id": {
+      "type": "string",
+      "pattern": "^ph[0-9]{1,2}$"
+    },
+    "holder": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/id"
+        },
+        {
+          "const": "audience"
+        }
+      ]
+    },
+    "module_id": {
+      "enum": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08",
+        "M09",
+        "M10",
+        "M11",
+        "M12"
+      ]
+    },
+    "node_module": {
+      "enum": [
+        "M01",
+        "M02",
+        "M03",
+        "M04",
+        "M05",
+        "M06",
+        "M07",
+        "M08",
+        "M09",
+        "M10",
+        "M11",
+        "M12",
+        "extra"
+      ]
+    },
+    "epistemic": {
+      "enum": [
+        "canon",
+        "consensus",
+        "fan_theory",
+        "sfsh_analysis"
+      ]
+    },
+    "model_name": {
+      "enum": [
+        "haiku",
+        "luna"
+      ]
+    },
+    "tier": {
+      "enum": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ]
+    },
+    "provenance_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "locator",
+        "support"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "support": {
+          "enum": [
+            "direct",
+            "inferred"
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/provenance_item"
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "grade",
+        "basis"
+      ],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "grade": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "basis": {
+          "type": "string"
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenance",
+        "confidence",
+        "epistemic",
+        "coverage_ref",
+        "phase_ref",
+        "spoiler",
+        "authored_by",
+        "reviewed_by",
+        "review"
+      ],
+      "properties": {
+        "provenance": {
+          "$ref": "#/definitions/provenance"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        },
+        "epistemic": {
+          "$ref": "#/definitions/epistemic"
+        },
+        "coverage_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phase_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/phase_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "spoiler": {
+          "enum": [
+            "none",
+            "mid",
+            "ending"
+          ]
+        },
+        "authored_by": {
+          "$ref": "#/definitions/model_name"
+        },
+        "reviewed_by": {
+          "$ref": "#/definitions/model_name"
+        },
+        "review": {
+          "enum": [
+            "agreed",
+            "revised",
+            "disputed"
+          ]
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "epistemic",
+        "provenance"
+      ],
+      "properties": {
+        "claim": {
+          "type": "string",
+          "minLength": 1
+        },
+        "epistemic": {
+          "enum": [
+            "canon",
+            "consensus",
+            "fan_theory"
+          ]
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenance"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "url",
+        "title",
+        "publisher",
+        "tier",
+        "site_key",
+        "license",
+        "fetched_at"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/definitions/tier"
+        },
+        "site_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fetched_at": {
+          "type": "string"
+        }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "order"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/phase_id"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "coverage_unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "from",
+        "to",
+        "label"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "volume",
+            "episode",
+            "arc",
+            "season",
+            "whole"
+          ]
+        },
+        "from": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "to": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "module_choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "weight",
+        "enabled",
+        "reason"
+      ],
+      "properties": {
+        "module": {
+          "$ref": "#/definitions/module_id"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "creator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "role"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_id",
+        "title",
+        "title_alt",
+        "creators",
+        "medium",
+        "bibliographic",
+        "genres",
+        "coverage",
+        "publish_mode",
+        "rights",
+        "module_selection",
+        "phases"
+      ],
+      "properties": {
+        "work_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title_alt": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "creators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/creator"
+          }
+        },
+        "medium": {
+          "enum": [
+            "novel",
+            "manga",
+            "anime",
+            "film",
+            "drama",
+            "game",
+            "other"
+          ]
+        },
+        "bibliographic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "publisher",
+            "first_release",
+            "status",
+            "source_ids"
+          ],
+          "properties": {
+            "publisher": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "first_release": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "completed",
+                "ongoing",
+                "unknown"
+              ]
+            },
+            "source_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/coverage_unit"
+          }
+        },
+        "publish_mode": {
+          "enum": [
+            "Public",
+            "Restricted"
+          ]
+        },
+        "rights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "copyright_status",
+            "holder_policy_note",
+            "source_ids"
+          ],
+          "properties": {
+            "state": {
+              "type": "string"
+            },
+            "copyright_status": {
+              "enum": [
+                "in_copyright",
+                "public_domain",
+                "unknown"
+              ]
+            },
+            "holder_policy_note": {
+              "type": "string"
+            },
+            "source_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "module_selection": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/module_choice"
+          }
+        },
+        "phases": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 7,
+          "items": {
+            "$ref": "#/definitions/phase"
+          }
+        }
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "what",
+        "reason"
+      ],
+      "properties": {
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "what": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "insufficient_sources",
+            "conflicting_sources",
+            "out_of_coverage"
+          ]
+        }
+      }
+    },
+    "node_Character": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Character"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "node_Faction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Faction"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "node_Event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "story_order",
+        "disclosure_phase"
+      ],
+      "properties": {
+        "type": {
+          "const": "Event"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "story_order": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "disclosure_phase": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/phase_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "node_Outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Outcome"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "node_Why": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "level",
+        "factor_kind"
+      ],
+      "properties": {
+        "type": {
+          "const": "Why"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "level": {
+          "enum": [
+            "direct",
+            "factor",
+            "root"
+          ]
+        },
+        "factor_kind": {
+          "enum": [
+            "political",
+            "psychological",
+            "social",
+            "chance",
+            "rule"
+          ]
+        }
+      }
+    },
+    "node_Secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Secret"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "node_Motive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "owner",
+        "kind",
+        "phase_from",
+        "phase_to"
+      ],
+      "properties": {
+        "type": {
+          "const": "Motive"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "owner": {
+          "$ref": "#/definitions/id"
+        },
+        "kind": {
+          "enum": [
+            "goal",
+            "fear",
+            "belief",
+            "conflict"
+          ]
+        },
+        "phase_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/phase_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase_to": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/phase_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "node_Arc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "character",
+        "initial_state",
+        "final_state",
+        "arc_type"
+      ],
+      "properties": {
+        "type": {
+          "const": "Arc"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "character": {
+          "$ref": "#/definitions/id"
+        },
+        "initial_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arc_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "node_WorldRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "kind",
+        "consequence"
+      ],
+      "properties": {
+        "type": {
+          "const": "WorldRule"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "kind": {
+          "enum": [
+            "constraint",
+            "ability",
+            "institution"
+          ]
+        },
+        "consequence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "node_Setup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "meaning"
+      ],
+      "properties": {
+        "type": {
+          "const": "Setup"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "meaning": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "node_Theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "question",
+        "values",
+        "tension"
+      ],
+      "properties": {
+        "type": {
+          "const": "Theme"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tension": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "node_EmotionBeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "phase",
+        "emotion",
+        "intensity",
+        "cause_refs"
+      ],
+      "properties": {
+        "type": {
+          "const": "EmotionBeat"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "phase": {
+          "$ref": "#/definitions/phase_id"
+        },
+        "emotion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intensity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "cause_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        }
+      }
+    },
+    "node_Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "kind"
+      ],
+      "properties": {
+        "type": {
+          "const": "Context"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "kind": {
+          "enum": [
+            "reception",
+            "award",
+            "influence",
+            "symbolism",
+            "controversy"
+          ]
+        }
+      }
+    },
+    "node_IconicMoment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "event_ref",
+        "why_famous",
+        "context_refs"
+      ],
+      "properties": {
+        "type": {
+          "const": "IconicMoment"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "event_ref": {
+          "$ref": "#/definitions/id"
+        },
+        "why_famous": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        }
+      }
+    },
+    "node_Interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "topic",
+        "positions"
+      ],
+      "properties": {
+        "type": {
+          "const": "Interpretation"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "positions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/position"
+          }
+        }
+      }
+    },
+    "node_Quiz": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "question",
+        "answer",
+        "reasoning_refs",
+        "quiz_type"
+      ],
+      "properties": {
+        "type": {
+          "const": "Quiz"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasoning_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "quiz_type": {
+          "enum": [
+            "causal",
+            "motive",
+            "counterfactual"
+          ]
+        }
+      }
+    },
+    "edge_Relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta",
+        "kind",
+        "valence",
+        "phase_from",
+        "phase_to",
+        "changed_by"
+      ],
+      "properties": {
+        "type": {
+          "const": "Relation"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "valence": {
+          "enum": [
+            "positive",
+            "negative",
+            "ambivalent",
+            "neutral"
+          ]
+        },
+        "phase_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/phase_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase_to": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/phase_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changed_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "edge_Causes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta",
+        "kind"
+      ],
+      "properties": {
+        "type": {
+          "const": "Causes"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "kind": {
+          "enum": [
+            "causes",
+            "enables",
+            "motivates",
+            "prevents"
+          ]
+        }
+      }
+    },
+    "edge_Knows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta",
+        "holder",
+        "phase",
+        "state"
+      ],
+      "properties": {
+        "type": {
+          "const": "Knows"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/holder"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "holder": {
+          "$ref": "#/definitions/holder"
+        },
+        "phase": {
+          "$ref": "#/definitions/phase_id"
+        },
+        "state": {
+          "enum": [
+            "unknown",
+            "suspects",
+            "misbelieves",
+            "knows"
+          ]
+        }
+      }
+    },
+    "edge_Drives": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Drives"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_ConflictsWith": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "ConflictsWith"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_TurnsAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "TurnsAt"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_Constrains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Constrains"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_PaysOff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "PaysOff"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_Embodies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Embodies"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_Evokes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "Evokes"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "edge_Explains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta",
+        "refs"
+      ],
+      "properties": {
+        "type": {
+          "const": "Explains"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        }
+      }
+    },
+    "edge_About": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta"
+      ],
+      "properties": {
+        "type": {
+          "const": "About"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/id"
+            },
+            {
+              "const": "work"
+            }
+          ]
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Character",
+            "Faction",
+            "Event",
+            "Outcome",
+            "Why",
+            "Secret",
+            "Motive",
+            "Arc",
+            "WorldRule",
+            "Setup",
+            "Theme",
+            "EmotionBeat",
+            "Context",
+            "IconicMoment",
+            "Interpretation",
+            "Quiz"
+          ]
+        }
+      },
+      "discriminator": {
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/definitions/node_Character"
+        },
+        {
+          "$ref": "#/definitions/node_Faction"
+        },
+        {
+          "$ref": "#/definitions/node_Event"
+        },
+        {
+          "$ref": "#/definitions/node_Outcome"
+        },
+        {
+          "$ref": "#/definitions/node_Why"
+        },
+        {
+          "$ref": "#/definitions/node_Secret"
+        },
+        {
+          "$ref": "#/definitions/node_Motive"
+        },
+        {
+          "$ref": "#/definitions/node_Arc"
+        },
+        {
+          "$ref": "#/definitions/node_WorldRule"
+        },
+        {
+          "$ref": "#/definitions/node_Setup"
+        },
+        {
+          "$ref": "#/definitions/node_Theme"
+        },
+        {
+          "$ref": "#/definitions/node_EmotionBeat"
+        },
+        {
+          "$ref": "#/definitions/node_Context"
+        },
+        {
+          "$ref": "#/definitions/node_IconicMoment"
+        },
+        {
+          "$ref": "#/definitions/node_Interpretation"
+        },
+        {
+          "$ref": "#/definitions/node_Quiz"
+        }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Relation",
+            "Causes",
+            "Knows",
+            "Drives",
+            "ConflictsWith",
+            "TurnsAt",
+            "Constrains",
+            "PaysOff",
+            "Embodies",
+            "Evokes",
+            "Explains",
+            "About"
+          ]
+        }
+      },
+      "discriminator": {
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/definitions/edge_Relation"
+        },
+        {
+          "$ref": "#/definitions/edge_Causes"
+        },
+        {
+          "$ref": "#/definitions/edge_Knows"
+        },
+        {
+          "$ref": "#/definitions/edge_Drives"
+        },
+        {
+          "$ref": "#/definitions/edge_ConflictsWith"
+        },
+        {
+          "$ref": "#/definitions/edge_TurnsAt"
+        },
+        {
+          "$ref": "#/definitions/edge_Constrains"
+        },
+        {
+          "$ref": "#/definitions/edge_PaysOff"
+        },
+        {
+          "$ref": "#/definitions/edge_Embodies"
+        },
+        {
+          "$ref": "#/definitions/edge_Evokes"
+        },
+        {
+          "$ref": "#/definitions/edge_Explains"
+        },
+        {
+          "$ref": "#/definitions/edge_About"
+        }
+      ]
+    }
+  }
+}

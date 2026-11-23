@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "strict": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist/assets",
+    "newLine": "lf",
+    "skipLibCheck": true
+  },
+  "include": ["src/client/**/*.ts", "src/search-core.ts", "src/filter-core.ts", "src/html.ts", "src/public-types.ts"]
+}

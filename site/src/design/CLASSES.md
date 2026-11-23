@@ -1,0 +1,81 @@
+# Site template hooks
+
+Each line names a class or element role emitted by worker S. Figure-specific hooks belong to worker F.
+
+- `site-header`: centered shared header containing name, search, and navigation.
+- `site-name`: link to the top page with the configured public name (fallback: the provisional name; harness/config/site.json).
+- `search-form`: GET search form usable without JavaScript.
+- `search-controls`: flexible input/button row with minimum target spacing.
+- `mobile-menu`: native details menu visible below the tablet breakpoint.
+- `wide-nav`: expanded navigation visible from the tablet breakpoint.
+- `text-column`: centered main text column with responsive gutters.
+- `site-footer`: unofficial notice and a secondary nav to the four common pages (about, policy, takedown, spoilers) and the sitemap.
+- `coverage`: coverage and spoiler level on the work entrance screen.
+- `figure-entrances`: large links to reverse plot and relations.
+- `text-block`: escaped authored paragraphs, optionally spoiler folded.
+- `spoiler`: native closed details for ending content or quiz answers.
+- `spoiler-label`: visible mid-story spoiler warning.
+- `epistemic`: mark and label of an epistemic class, optionally its grade.
+- `ep-canon`: canonical-setting semantic color, always paired with text and mark.
+- `ep-consensus`: consensus semantic color, always paired with text and mark.
+- `ep-fan_theory`: fan-theory semantic color, always paired with text and mark.
+- `ep-sfsh_analysis`: original-analysis semantic color, always paired with text and mark.
+- `evidence-grade`: evidence-derived confidence or explicit unavailable grade.
+- `legend`: permanent explanation of all four epistemic classes.
+- `metadata-links`: creator, genre, and medium list-page links.
+- `subpage-links`: navigation between a work's analysis pages.
+- `work-list`: ordered collection of canonical work entries.
+- `work-row`: work link and medium/creators/genres/coverage/spoiler metadata.
+- `sort-control`: accessible label and index sort selector.
+- `index-jumps`: links to nonempty kana, Latin, and numeric heading groups.
+- `index-group`: one static reading-order group with a heading and works.
+- `entrances`: nonempty genre or media pages with counts.
+- `filter-form`: search query and six facet checkbox groups.
+- `filter-option`: a checkbox label with option name and live count.
+- `sources`: bibliography list with wrapping visible source URLs.
+- `figure-column`: wider figure/table area, bounded by the figure maximum.
+- `table-frame`: internal horizontal scrolling frame for data tables.
+- `breadcrumbs`: top/index/work/subpage navigation trail.
+- `page-lead`: short fixed explanation at the top of the people/events list pages (secondary text).
+- `person`: one character section on the people page (heading, mark/grade, faction, summary, then motives and arcs).
+- `element`: one listed element (motive, arc, event, world rule, setup, emotion beat) with heading, mark/grade and fields; anchor id `el-<id>`.
+- `element-meta`: small secondary line with kind, phase interval, faction, emotion and textual intensity ("強さ n/5").
+- `arc-change`: an arc's initial state → final state, bold.
+- `ref-group`: a labelled group of related element labels (causes, effects, drives, conflicts, turns, pays off, constrains, evoked by).
+- `ref-title`: small bold label of a reference group.
+- `ref-list`: list of related element links; ending references are folded in a nested `spoiler` details.
+- `analysis`: original-analysis (S2) prose block, always labelled with the sfsh_analysis mark and text; inline-start rule in the sfsh_analysis color.
+- `analysis-label`: the 「◆ 独自分析」 label line of an `analysis` block.
+- `fig-b__analysis`, `fig-b__analysis-label` (styled in base.css; emitted by figures/reversePlot.ts): analysis paragraph under a node summary in the figure B list and table.
+- `h4`: emotion-beat headings under a phase heading on the events page (body size, bold).
+- `html[lang=ja]`: Japanese document language and token-based base typography.
+- `meta[name=sfsh-root]`: relative site-root prefix consumed by clients.
+- `header`: shared site entrance and navigation landmark.
+- `nav[aria-label=グローバル]`: four primary navigation destinations.
+- `main`: single page-purpose landmark with one h1.
+- `footer`: site policy notice and secondary navigation landmark.
+- `section` and `h2`: analysis blocks separated by the section-gap token.
+- `details` and `summary`: keyboard-accessible menus, spoilers, and quiz disclosure.
+- `form[method=get]` and `input[name=q]`: shareable query navigation.
+- `fieldset` and `legend`: accessible facet axis groups.
+- `input[type=checkbox]`: facet selection controls with large parent labels.
+- `select#sort`: title, publication, and update sort modes.
+- `#work-index`: static index groups replaced/reordered by the sort client.
+- `#search-filters`: search-page form read by the search and filter clients.
+- `#query` and `#header-q`: synchronized search fields on the search page.
+- `#clear-filters`: clears selected facets, including disabled zero-count selections.
+- `#search-results[aria-live=polite]`: live canonical-title search results.
+- `[data-count]`: per-option dynamic count keyed by axis and value.
+- `[data-work-id]`, `[data-title]`, `[data-reading]`, `[data-added]`, `[data-updated]`: deterministic index sort metadata.
+- `table`, `th`, and `td`: scroll-frame data cells with sticky headings and first column.
+- `noscript`: search-unavailable notice with a static index link.
+- `[hidden]`: hides reading-group jumps during chronological sorting.
+- `:focus-visible`: token-based keyboard focus outline.
+- `a`: relative navigation and canonical-title links; bibliography URLs use nofollow/noopener.
+- `label`: named input association or wrapping facet label.
+- `button[type=submit]`: submits the progressively enhanced search form.
+- `button[type=button]`: clears facets without submitting a navigation.
+- `ol`, `ul`, and `li`: static work, bibliography, legend, and metadata lists.
+- `p`: escaped prose, coverage, confidence, and policy notices.
+- `link[rel=stylesheet]`: the single local combined CSS resource.
+- `script[type=module]`: local compiled search, sort, or phase enhancement.

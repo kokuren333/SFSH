@@ -1,0 +1,111 @@
+{
+  "works": [
+    {
+      "work_id": "novel-akari-2020",
+      "title": "灯りの航路",
+      "title_original": null,
+      "title_reading": null,
+      "title_reading_basis": "estimated",
+      "title_status": "confirmed",
+      "title_source_ids": [
+        "s1"
+      ],
+      "aliases": [
+        {
+          "text": "灯路",
+          "kind": "common",
+          "attested": true,
+          "source_ids": [
+            "s1"
+          ],
+          "origin_job_id": "fixture",
+          "first_seen": "2026-01-02T00:00:00Z"
+        },
+        {
+          "text": "あかりのこおろ",
+          "kind": "input",
+          "attested": false,
+          "source_ids": [],
+          "origin_job_id": "fixture",
+          "first_seen": "2026-01-02T00:00:00Z"
+        }
+      ],
+      "medium": "novel",
+      "creators": [],
+      "genres": [],
+      "tags": [],
+      "first_release_year": null,
+      "publish_mode": "Public",
+      "history": [],
+      "first_published_at": "2026-01-02T00:00:00Z",
+      "updated_at": "2026-01-02T00:00:00Z",
+      "created_at": "2026-01-02T00:00:00Z"
+    },
+    {
+      "work_id": "anime-kumo-2021",
+      "title": "クラウド工房",
+      "title_original": null,
+      "title_reading": null,
+      "title_reading_basis": "estimated",
+      "title_status": "confirmed",
+      "title_source_ids": [
+        "s1"
+      ],
+      "aliases": [],
+      "medium": "anime",
+      "creators": [],
+      "genres": [],
+      "tags": [],
+      "first_release_year": null,
+      "publish_mode": "Public",
+      "history": [],
+      "first_published_at": "2026-01-02T00:00:00Z",
+      "updated_at": "2026-01-02T00:00:00Z",
+      "created_at": "2026-01-02T00:00:00Z"
+    },
+    {
+      "work_id": "novel-restricted-1999",
+      "title": "非公開専用の架空題名",
+      "title_original": null,
+      "title_reading": null,
+      "title_reading_basis": "estimated",
+      "title_status": "confirmed",
+      "title_source_ids": [
+        "s1"
+      ],
+      "aliases": [],
+      "medium": "other",
+      "creators": [],
+      "genres": [],
+      "tags": [],
+      "first_release_year": null,
+      "publish_mode": "Restricted",
+      "history": [],
+      "first_published_at": "2026-01-02T00:00:00Z",
+      "updated_at": "2026-01-02T00:00:00Z",
+      "created_at": "2026-01-02T00:00:00Z"
+    },
+    {
+      "work_id": "game-missing-2001",
+      "title": "生成前専用の架空題名",
+      "title_original": null,
+      "title_reading": null,
+      "title_reading_basis": "estimated",
+      "title_status": "confirmed",
+      "title_source_ids": [
+        "s1"
+      ],
+      "aliases": [],
+      "medium": "other",
+      "creators": [],
+      "genres": [],
+      "tags": [],
+      "first_release_year": null,
+      "publish_mode": "Public",
+      "history": [],
+      "first_published_at": "2026-01-02T00:00:00Z",
+      "updated_at": "2026-01-02T00:00:00Z",
+      "created_at": "2026-01-02T00:00:00Z"
+    }
+  ]
+}

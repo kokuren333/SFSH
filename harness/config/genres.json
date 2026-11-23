@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "note": "Controlled genre vocabulary (REQUIREMENTS §2.5 / §6.5). Luna may only choose from this list; code drops anything else.",
+  "genres": [
+    { "slug": "mystery", "label": "推理" },
+    { "slug": "suspense", "label": "サスペンス" },
+    { "slug": "political", "label": "政治劇" },
+    { "slug": "romance", "label": "恋愛" },
+    { "slug": "human_drama", "label": "人間ドラマ" },
+    { "slug": "battle", "label": "バトル" },
+    { "slug": "fantasy", "label": "ファンタジー" },
+    { "slug": "sf", "label": "SF" },
+    { "slug": "dark_fantasy", "label": "ダークファンタジー" },
+    { "slug": "narrative_trick", "label": "叙述トリック" },
+    { "slug": "ensemble", "label": "群像劇" },
+    { "slug": "historical", "label": "歴史" },
+    { "slug": "coming_of_age", "label": "青春" },
+    { "slug": "horror", "label": "ホラー" },
+    { "slug": "comedy", "label": "コメディ" },
+    { "slug": "slice_of_life", "label": "日常" },
+    { "slug": "sports", "label": "スポーツ" },
+    { "slug": "war", "label": "戦争" }
+  ]
+}

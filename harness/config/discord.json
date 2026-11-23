@@ -1,0 +1,10 @@
+{
+  "owner_id": null,
+  "allowed_user_ids": [],
+  "api_base": "https://discord.com/api/v10",
+  "gateway_url": "wss://gateway.discord.gg/?v=10&encoding=json",
+  "application_id": null,
+  "guild_id": null,
+  "production_enabled": false,
+  "attachment_max_bytes": 1048576
+}

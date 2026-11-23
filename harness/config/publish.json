@@ -1,0 +1,12 @@
+{
+  "production_enabled": true,
+  "remote_url": "https://github.com/kokuren333/sfsh-site.git",
+  "test_remote_url": "publish-test/site.git",
+  "branch": "main",
+  "mode": "auto",
+  "base_url": "https://kokuren333.github.io/sfsh-site/",
+  "test_base_url": "https://sfsh-test.invalid/",
+  "commit_author": { "name": "SFSH publisher", "email": "sfsh-publisher@users.noreply.invalid" },
+  "url_check": { "timeout_s": 600, "interval_s": 15 },
+  "allow_emails": []
+}
