@@ -8,7 +8,7 @@ import { normalizeMediumHint } from "../research/identify/decide.ts";
 import { WORK_QUERY_MAX } from "./request.ts";
 import { emitNotice } from "./notify.ts";
 import { formatRange, parseRange } from "./range.ts";
-import { findJob, saveJob, type QueueEnv } from "./store.ts";
+import { findJob, saveJob, withQueueLock, type QueueEnv } from "./store.ts";
 import { TERMINAL_STATES, type Actor, type ClarifyAnswer, type ClarifyInfo, type JobRequest, type NoticeKind, type OpResult } from "./types.ts";
 
 export interface OpHooks {
@@ -95,11 +95,18 @@ function denied(job: JobRequest, actor: Actor, what: string): OpResult {
  * (researching..building) → cancel_requested; the worker stops at the next stage boundary. Terminal → refused.
  */
 export function cancelJob(env: QueueEnv, jobId: string, actor: Actor, now: Date = new Date(), hooks: OpHooks = {}): OpResult {
+  // AMENDMENT 13: read → decide → save under the queue state lock (the worker may move the job meanwhile)
+  return withQueueLock(env, () => cancelJobLocked(env, jobId, actor, now, hooks));
+}
+
+function cancelJobLocked(env: QueueEnv, jobId: string, actor: Actor, now: Date, hooks: OpHooks): OpResult {
   const loc = findJob(env, jobId);
   if (!loc) return { ok: false, text: `不明なジョブ: ${jobId}`, data: { job_id: jobId, reason: "unknown_job" } };
   const job = loc.job;
   if (!permitted(job, actor)) return denied(job, actor, "取消");
   if (TERMINAL_STATES.includes(job.state)) return { ok: false, text: `${jobId} は終了済みです（${job.state}）。取消できません`, data: { job_id: jobId, state: job.state, reason: "terminal" } };
+  if (job.state === "publish_pending" && job.publish_wait?.started_at)
+    return { ok: false, text: `${jobId} は公開の実行中です（${job.publish_wait.started_at} 開始）。取消できません`, data: { job_id: jobId, state: job.state, reason: "publishing" } };
   const by = { id: actor.id, name: actor.name };
   if (loc.dir === "running") {
     if (job.cancel_requested) return { ok: true, text: `${jobId} は取消要求済みです（段の区切りで止まります）`, data: { job_id: jobId, state: job.state, cancel_requested: true } };
@@ -151,6 +158,10 @@ export function effectiveMedium(job: JobRequest): string | null {
  *  - work / medium: back to received; identification re-runs with the answered words / medium.
  */
 export function answerJob(env: QueueEnv, jobId: string, answer: AnswerInput, actor: Actor, now: Date = new Date(), hooks: OpHooks = {}): OpResult {
+  return withQueueLock(env, () => answerJobLocked(env, jobId, answer, actor, now, hooks));
+}
+
+function answerJobLocked(env: QueueEnv, jobId: string, answer: AnswerInput, actor: Actor, now: Date, hooks: OpHooks): OpResult {
   const loc = findJob(env, jobId);
   if (!loc) return { ok: false, text: `不明なジョブ: ${jobId}`, data: { job_id: jobId, reason: "unknown_job" } };
   const job = loc.job;

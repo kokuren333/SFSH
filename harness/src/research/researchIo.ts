@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { SearchCallRecord } from "./candidates.ts";
 import type { Claim, ClaimReviewEntry } from "./claimTypes.ts";
 import type { BudgetState, Candidate, FetchDecision, ResearchGap, SourceCard } from "./types.ts";
+import { renameSyncRetry } from "../util/fsRetry.ts";
 
 /**
  * Small synchronous readers/writers for works/<id>/research/*.json (WP-1.3).
@@ -46,7 +47,7 @@ export function writeJsonAtomic(path: string, data: unknown): void {
   const tmp = `${path}.${process.pid}.${Date.now().toString(36)}.${tmpSeq++}.tmp`;
   writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");
   try {
-    renameSync(tmp, path);
+    renameSyncRetry(tmp, path);
   } catch {
     // Windows: renaming over a file briefly held open elsewhere can fail (EPERM/EBUSY). Fall back to a copy.
     try {

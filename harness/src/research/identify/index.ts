@@ -33,6 +33,7 @@ import {
 } from "./decide.ts";
 import { matchIndex, normalizeQuery } from "./normalize.ts";
 import { buildExtractPrompt, buildSearchPrompt, EXTRACT_SCHEMA, SEARCH_SCHEMA, type ExtractOutput, type SearchOutput } from "./prompts.ts";
+import { renameSyncRetry } from "../../util/fsRetry.ts";
 
 export { matchIndex, normalizeQuery } from "./normalize.ts";
 
@@ -379,7 +380,7 @@ function resolveCandidate(r: ResolveContext): IdentifyResult {
   const target = path.join(deps.worksDir, workId);
   const existed = fs.existsSync(path.join(target, "work.json"));
   if (fs.existsSync(target)) mergeStaging(staging, target);
-  else fs.renameSync(staging, target);
+  else renameSyncRetry(staging, target);
 
   const allSources = loadWorkSources(target);
   const allCards = new Map([...allSources.values()].map((s) => [s.card.source_id, s.card]));

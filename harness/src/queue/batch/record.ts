@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { QueueEnv } from "../store.ts";
 import { BATCH_ID_RE, type BatchRecord } from "./types.ts";
+import { renameSyncRetry } from "../../util/fsRetry.ts";
 
 export function batchesDir(env: QueueEnv): string {
   return path.join(env.queueDir, "batches");
@@ -60,7 +61,7 @@ export function writeBatch(env: QueueEnv, rec: BatchRecord): void {
   const file = batchJsonPath(env, rec.batch_id);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(rec, null, 2) + "\n", "utf8");
-  fs.renameSync(tmp, file);
+  renameSyncRetry(tmp, file);
 }
 
 export function listBatchIds(env: QueueEnv): string[] {

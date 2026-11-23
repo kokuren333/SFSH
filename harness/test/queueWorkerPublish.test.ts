@@ -45,7 +45,10 @@ test("hook wired (gate open + auto): built → published, completion notice says
   assert.deepEqual(calls, [{ jobId: id, workId: W1.work_id }]);
   const done = listNotices(env, { job_id: id }).find((n) => n.kind === "completed")!;
   assert.match(done.text, /公開しました（リリース 20261123-120000000）/);
-  assert.match(fs.readFileSync(path.join(env.jobsDir, `${id}.log`), "utf8"), /state built -> published/);
+  const log = fs.readFileSync(path.join(env.jobsDir, `${id}.log`), "utf8");
+  // AMENDMENT 13: built → publish_pending (slot freed, publish lane) → published
+  assert.match(log, /state built -> publish_pending/);
+  assert.match(log, /state publish_pending -> published/);
 });
 
 test("hook wired but the publish fails: the job stays built (not failed) and the notice says so", async (t) => {

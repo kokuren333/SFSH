@@ -3,10 +3,11 @@
  * `sfsh job resume`; with the queue, `release` puts the work's held queue jobs back to `queued`, and the worker resumes
  * them from the first unfinished stage (the runner's per-stage checkpoint is untouched; its own hold check re-runs).
  */
-import { listJobs, saveJob, type QueueEnv } from "./store.ts";
+import { listJobs, saveJob, withQueueLock, type QueueEnv } from "./store.ts";
 import type { JobRequest } from "./types.ts";
 
 export function requeueHeldJobs(env: QueueEnv, workId: string, now: Date = new Date(), afterTransition?: (job: JobRequest) => void): string[] {
+  return withQueueLock(env, () => {
   const out: string[] = [];
   for (const { job } of listJobs(env, ["held"])) {
     if (job.state !== "held" || job.resolved?.work_id !== workId) continue;
@@ -16,4 +17,5 @@ export function requeueHeldJobs(env: QueueEnv, workId: string, now: Date = new D
     out.push(job.job_id);
   }
   return out;
+  });
 }

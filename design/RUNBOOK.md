@@ -14,7 +14,7 @@
 | 公開の形 | 公開リポジトリは常に「現在の `site/dist` だけを含む親なしの単一コミット」。毎回強制 push で置き換えるので、取り下げた内容は公開リポジトリの履歴に残らない。 |
 | push 前検証 | (a) 拡張子の許可リスト（html, css, js, json, svg, txt, xml, woff2, ico と `.nojekyll`）／(b) dist に現れる作品が Public だけ／(c) 秘密情報様の文字列・メールアドレス・ローカルパスなし／(d) 外部リソースの読み込みなし／(e) A-2（画像・メディア混入）の再検査／(f) 前回比の異常増（警告のみ）／(g) catalog.json と一覧系ページの作品が Public の集合と一致。(f) 以外が1つでも該当すれば push しない。 |
 | 取り違え検査 | push 直前に、`publish/` が独立したリポジトリで、remote が `origin` の1つだけ、その URL（fetch・push とも）が設定の公開先と一致し、ハーネス側の remote と異なることを確かめる。不一致なら push しない。 |
-| 自動公開 | ゲート開かつ `mode: auto`（現在の設定）で `publish/` が初期化済みのとき、worker が作品の完成（`built`）の後に公開し、push と push 後検証が通れば `published` にする。失敗してもジョブは `built` のまま（通知に要点）。`manual` なら `built` で止まり、`sfsh publish` でまとめて公開する。 |
+| 自動公開 | ゲート開かつ `mode: auto`（現在の設定）で `publish/` が初期化済みのとき、worker が作品の完成（`built`）の後に `publish_pending`（ビルド済み・公開待ち）へ移し、公開レーンが完成順に1件ずつ公開して、push と push 後検証が通れば `published` にする（v1.9・A13。公開が同時に走ることはない）。失敗してもジョブは `built` のまま（通知に要点）。`manual` なら `built` で止まり、`sfsh publish` でまとめて公開する。 |
 | push 後検証 | 公開 URL の全ファイルの sha256 をマニフェストと照合する。**照合の前に Pages のデプロイ完了を待つ**（M6）: `release-manifest.json` をキャッシュ回避のクエリつきで取得し、新しい内容になるまで正規の URL は取得しない（デプロイ前の 404 が CDN にキャッシュされるのを防ぐ）。待ちと照合の合計は `url_check.timeout_s`（600 秒）まで。 |
 
 ## 2. 日常の操作
@@ -25,7 +25,7 @@
 |---|---|---|
 | 1作品を投入する | `enqueue --work "<作品名>" [--range "<範囲>"] [--medium <媒体>]` | `queued to inbox: <job_id>`。範囲を省略すると「全体」。既存作品を同じ範囲で投入すると既存ジョブに合流する（範囲が違えば別ジョブ。例: 「全12話」で作った作品に範囲なしで投入すると新しい調査ジョブになる） |
 | 一覧（.txt／.csv）で投入する | `import <file> [--range …] [--dry-run]` | `batch B…: N 行 → 投入 n／エラー e／重複 d`。先に `--dry-run` で解釈を確かめるとよい。照会は `status --batch <batch_id>` |
-| 処理する | `worker`（常駐。止めるときは Ctrl+C で次の段の境目で停止）または `worker --once`（やることが無くなったら終了） | 受付済みの指示はまず同定され（実行中のジョブがあってもその段の境目で同定される）、その後1件ずつ S1〜S4 → ビルド → 自動公開。1作品の目安は 35〜45 分 |
+| 処理する | `worker`（常駐。止めるときは Ctrl+C で各ジョブが次の段の境目で停止）または `worker --once`（やることが無くなったら終了）。並行数は `harness/config/worker.json` の `max_concurrent_jobs`（既定3、1〜8）、1回だけ変えるなら `--concurrency n` | 受付済みの指示はまず同定され、その後最大 N 件が並行に S1〜S4 → ビルド → 公開待ち → 公開（公開は1件ずつ、完成順）。聞き返し中のジョブは枠を使わない。1作品の目安は 35〜45 分（3件の連投でも並行に進む）。Discord からは `start_worker`（タスク SFSHWORKER）で起動し、統括ジョブの実行中でも起動できる |
 | 聞き返しに答える | `status <job_id>` で候補を見て `answer <job_id> --pick <n>`（または `--work`／`--medium`／`--range`） | ジョブが `queued` に進む |
 | 取り消す | `cancel <job_id>`（バッチは `cancel --batch <batch_id>`） | `queued` 以前は即時、実行中は次の段の境目で `cancelled` |
 | 既存作品の文章だけ作り直す（再調査なし） | `regen <work_id>` → `publish` | 執筆・組版・自動確認だけを保存済みの調査から再実行する（検索・取得 0）。前の状態は `works/<id>/gen/_backup-<時刻>/`。worker と同時に動かさない |
@@ -37,7 +37,7 @@
 
 | したいこと | コマンド | 確認するところ |
 |---|---|---|
-| キューの状態を見る | `status`（`status <job_id>`・`status --batch <id>`） | queued／running／built／published、worker の稼働 |
+| キューの状態を見る | `status`（`status <job_id>`・`status --batch <id>`） | queued／running／publish_pending（公開待ちの順番と公開中のもの）／built／published、worker の稼働。worker の開始・終了・スロット・公開レーンの記録は `queue/worker.log` |
 | 公開の状態を見る | `publish status` | ゲート（開／閉）、公開先、取り違え検査 ok、直近の公開 |
 | 手で公開する（`manual` 運用、自動公開の失敗後、`regen`・`release` の後） | `publish` | `PUSHED`、`verify … ok`、`remote check ok`、`post-push … ok`（デプロイ待ちの秒数も出る） |
 | push せずに検証だけ | `publish --dry-run` | `DRY_RUN`、検証と取り違え検査の結果 |

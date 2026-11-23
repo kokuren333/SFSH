@@ -19,6 +19,7 @@ import { composePublic, projectPublic, suggestTags, writePages, writeSynopsis } 
 import { summarizeReviews } from "../nkg/reviewSummary.ts";
 import { autoCheck, formatNotice } from "../check/index.ts";
 import type { StageContext, StageResult } from "./context.ts";
+import { renameSyncRetry } from "../util/fsRetry.ts";
 
 /**
  * M1 job runner: S0 identify → S1 research → S2 NKG for one work (REQUIREMENTS 1.1, 4.4).
@@ -154,7 +155,7 @@ function writeStateFile(jobsDir: string, st: JobState, now: Date): void {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.mkdirSync(jobsDir, { recursive: true });
   fs.writeFileSync(tmp, JSON.stringify(st, null, 2) + "\n", "utf8");
-  fs.renameSync(tmp, file);
+  renameSyncRetry(tmp, file);
 }
 
 function appendLog(jobsDir: string, jobId: string, msg: string, now: Date): void {
@@ -379,7 +380,7 @@ export function writeJobBudget(workDir: string, jobId: string, budget: BudgetSta
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${jobId}.json`);
   fs.writeFileSync(`${file}.tmp`, JSON.stringify({ job_id: jobId, ...budget }, null, 2) + "\n", "utf8");
-  fs.renameSync(`${file}.tmp`, file);
+  renameSyncRetry(`${file}.tmp`, file);
 }
 
 // ---------- runner ----------

@@ -1,20 +1,30 @@
 /**
- * The single queue worker (WP-4.2, REQUIREMENTS §4.4, PLAN §3).
+ * The queue worker (WP-4.2, REQUIREMENTS §4.4, PLAN §3; parallel job slots since AMENDMENT 13).
  *
- * One pass:
+ * One worker process (queue/worker.lock) runs a scheduler loop:
  *  1. start-up recovery (once): reconcileDirs; jobs left in running/ by a dead worker get their runner "running"
  *     stages back to "pending" (attempt counters kept: a kill counts as one attempt) and return to queued;
- *     inbox jobs left "identifying" return to received.
+ *     inbox jobs left "identifying" return to received; a publish_pending job whose publish was in progress goes back
+ *     to waiting (the lane publishes it again).
  *  2. adoptInboxDrops (Muse JSON drops).
- *  3. intake: EVERY received inbox job is identified before any main processing (§4.4, §4.5): range null →
- *     clarifying (range_unparsed, identify not run); otherwise the runner runs only the identify stage; clarifying →
- *     candidates + notice; resolved → idempotency key → merge or queued (+ restricted / identified notices).
- *  4. main: one ready job (priority high first → received_at → batch line) runs the remaining stages; the queue
- *     state follows the runner (researching/structuring/generating/checking); done → building (site build, 3 attempts)
- *     → built (→ published when deps.publish is wired: gate open + mode auto, M5); failed / held → their folders;
- *     a cancel request stops the run at the next stage boundary.
- *  5. notices with reply_to null (CLI / Muse) are written to logs/jobs/<job_id>.log and moved to outbox/sent (via "local").
- * Every saveJob of any job is followed by deps.afterTransition(job) (batch records, wired by the orchestrator).
+ *  3. intake lane (one at a time): EVERY received inbox job is identified before new main processing starts (§4.4,
+ *     §4.5): range null → clarifying (range_unparsed, identify not run); otherwise the runner runs only the identify
+ *     stage; clarifying → candidates + notice; resolved → idempotency key → merge or queued (+ notices). A clarifying
+ *     job waits in inbox/ and never holds a job slot.
+ *  4. job slots (AMENDMENT 13): up to `concurrency` ready jobs (priority high first → received_at → batch line) run
+ *     the remaining stages at the same time, each in its own works/<id>/ and logs/jobs/<job_id>.*; the queue state
+ *     follows the runner (researching/structuring/generating/checking); done → building (site build, 3 attempts;
+ *     the build itself is serialized by the build lock) → built. With deps.publish wired (gate open + mode auto) the
+ *     job goes on to publish_pending ("built, waiting to publish") and its slot is freed; failed / held → their
+ *     folders; a cancel request stops the run at the next stage boundary.
+ *  5. publish lane (one at a time): publish_pending jobs in the order their builds finished (publish_wait.since)
+ *     take the publish lock one by one (deps.publish → snapshot + push) → published, or built when the publish
+ *     fails. The lane waits while another job sits between compose and autocheck (its public.json is not checked
+ *     yet), so a publish never carries a half-checked work.
+ *  6. notices with reply_to null (CLI / Muse) are written to logs/jobs/<job_id>.log and moved to outbox/sent (via "local").
+ * Every job-file transition is a fresh read → mutate → save under the queue state lock (store.withQueueLock), so
+ * transitions of parallel slots, the CLI and the Discord runner never overwrite each other. Every saveJob is followed
+ * by deps.afterTransition(job) (batch records, wired by the orchestrator).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -44,7 +54,7 @@ import { clarifyText, effectiveMedium, effectiveQuery, notifyJob, pendingPick } 
 import { parseRange } from "./range.ts";
 import { adoptInboxDrops } from "./request.ts";
 import { refreshAllBatches, refreshBatchForJob } from "./batch/refresh.ts";
-import { appendJobLog, ensureQueueDirs, findJob, listJobs, reconcileDirs, saveJob, type QueueEnv } from "./store.ts";
+import { appendJobLog, ensureQueueDirs, findJob, listJobs, reconcileDirs, saveJob, withQueueLock, type QueueEnv } from "./store.ts";
 import type { ClarifyInfo, JobRequest, JobStateName, RangeItem } from "./types.ts";
 
 export interface WorkerDeps {
@@ -65,11 +75,13 @@ export interface WorkerDeps {
 }
 
 export interface WorkerOptions {
-  /** Process until nothing is left to do (no received / queued job), then exit. */
+  /** Process until nothing is left to do (no received / queued / publishable job, no slot busy), then exit. */
   once?: boolean;
   pollMs?: number;
-  /** Stop after this many main (pipeline) runs. */
+  /** Stop after this many main (pipeline) runs have been started (the running ones are finished first). */
   maxJobs?: number;
+  /** Job slots run at the same time (AMENDMENT 13). Default 1 here; the CLI passes harness/config/worker.json (3). */
+  concurrency?: number;
   signal?: AbortSignal;
 }
 
@@ -77,7 +89,10 @@ export interface WorkerSummary {
   tookOverFrom: number | null;
   recovered: string[];
   identified: string[];
+  /** Final state of every main run, in the order the runs ENDED (published / built after the publish lane). */
   processed: { job_id: string; state: JobStateName }[];
+  /** Highest number of job slots busy at the same time (AMENDMENT 13 measurement). */
+  peakSlots: number;
 }
 
 export const BUILD_ATTEMPTS = 3;
@@ -130,22 +145,24 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
   const now = deps.now ?? (() => new Date());
   const build = deps.build ?? ((o: { worksDir: string; out: string }) => siteBuild({ worksDir: o.worksDir, out: o.out }));
   const pollMs = opts.pollMs ?? 2000;
-  const summary: WorkerSummary = { tookOverFrom: null, recovered: [], identified: [], processed: [] };
+  const concurrency = Math.max(1, Math.floor(opts.concurrency ?? 1));
+  const summary: WorkerSummary = { tookOverFrom: null, recovered: [], identified: [], processed: [], peakSlots: 0 };
   ensureQueueDirs(env);
   const lock = acquireWorkerLock(env, now);
   summary.tookOverFrom = lock.tookOverFrom;
-  appendWorkerLog(env, `worker start${opts.once ? " (once)" : ""}${opts.maxJobs != null ? ` max-jobs=${opts.maxJobs}` : ""}${lock.tookOverFrom !== null ? ` (took over stale lock of pid ${lock.tookOverFrom})` : ""}`, now());
+  appendWorkerLog(env, `worker start concurrency=${concurrency}${opts.once ? " (once)" : ""}${opts.maxJobs != null ? ` max-jobs=${opts.maxJobs}` : ""}${lock.tookOverFrom !== null ? ` (took over stale lock of pid ${lock.tookOverFrom})` : ""}`, now());
 
   /** Fresh read → mutate → save → afterTransition. Skips (returns null) when the job is gone or not in `expect`. */
-  const update = (jobId: string, expect: readonly JobStateName[] | null, mutate: (j: JobRequest) => void, note: string | null): JobRequest | null => {
-    const loc = findJob(env, jobId);
-    if (!loc) return null;
-    if (expect && !expect.includes(loc.job.state)) return null;
-    mutate(loc.job);
-    const saved = saveJob(env, loc.job, note, now());
-    deps.afterTransition?.(saved.job);
-    return saved.job;
-  };
+  const update = (jobId: string, expect: readonly JobStateName[] | null, mutate: (j: JobRequest) => void, note: string | null): JobRequest | null =>
+    withQueueLock(env, () => {
+      const loc = findJob(env, jobId);
+      if (!loc) return null;
+      if (expect && !expect.includes(loc.job.state)) return null;
+      mutate(loc.job);
+      const saved = saveJob(env, loc.job, note, now());
+      deps.afterTransition?.(saved.job);
+      return saved.job;
+    });
   const jlog = (jobId: string, m: string) => appendJobLog(env, jobId, m, now());
   const runnerDeps = (extra: Partial<RunnerDeps>): RunnerDeps => ({
     luna: deps.luna,
@@ -190,6 +207,11 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
         update(job.job_id, null, (x) => (x.state = "queued"), `worker recovery: was ${job.state} when the previous worker stopped; resumes from the first unfinished stage${reset.length ? ` (re-run ${reset.join(", ")})` : ""}`);
       }
       summary.recovered.push(`${job.job_id}: ${job.state} -> ${job.cancel_requested ? "cancelled" : "queued"}${reset.length ? ` (reset ${reset.join(",")})` : ""}`);
+    }
+    for (const { job } of listJobs(env, ["done"])) {
+      if (job.state !== "publish_pending" || !job.publish_wait?.started_at) continue;
+      update(job.job_id, ["publish_pending"], (x) => (x.publish_wait = { ...x.publish_wait, since: x.publish_wait?.since ?? x.updated_at, started_at: null }), `worker recovery: the publish started at ${job.publish_wait.started_at} did not finish; waits for the publish lane again`);
+      summary.recovered.push(`${job.job_id}: publish_pending (publish restarted)`);
     }
     for (const { job } of listJobs(env, ["inbox"])) {
       if (job.state !== "identifying") continue;
@@ -334,12 +356,17 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
       notifyJob(env, resolvedJob, "restricted", `Restricted: ${jobId}「${resolved.title}」（${workId}）は差し止め中（Restricted）の作品です。指示は受け付けて処理しますが、公開段へは進めません`, { work_id: workId }, now(), { includeMerged: false });
     if (normalizeQuery(resolvedJob.work_query) !== normalizeQuery(resolved.title))
       notifyJob(env, resolvedJob, "identified", `同定: ${jobId} 入力「${resolvedJob.work_query}」→ 正式名称「${resolved.title}」（${workId}、${resolved.title_status === "confirmed" ? "確定" : "暫定"}）`, { work_id: workId, title: resolved.title, title_status: resolved.title_status, method: resolved.method }, now(), { includeMerged: false });
-    const target = findMergeTarget(env, resolvedJob);
-    if (target) {
-      applyMerge(env, resolvedJob, target, now(), { afterTransition: deps.afterTransition });
-      return;
-    }
-    update(jobId, ["identifying"], (x) => (x.state = "queued"), `queued (priority ${resolvedJob.options.priority})`);
+    // merge decision and the transition in one critical section: a parallel slot cannot change the target meanwhile
+    withQueueLock(env, () => {
+      const fresh = findJob(env, jobId)?.job;
+      if (!fresh || fresh.state !== "identifying") return;
+      const target = findMergeTarget(env, fresh);
+      if (target) {
+        applyMerge(env, fresh, target, now(), { afterTransition: deps.afterTransition });
+        return;
+      }
+      update(jobId, ["identifying"], (x) => (x.state = "queued"), `queued (priority ${fresh.options.priority})`);
+    });
   };
 
   const intakeAll = async (): Promise<void> => {
@@ -360,9 +387,34 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
     }
   };
 
-  // ------------------------------------------------------------ 4. main
+  // ------------------------------------------------------------ 4. main (one job slot)
   const titleOf = (j: JobRequest) => j.resolved?.title ?? j.work_query;
 
+  /** Intake lane: one intake pass at a time; a caller arriving while one runs gets the running pass. */
+  let intakeP: Promise<void> | null = null;
+  const intakeLane = (): Promise<void> => {
+    if (!intakeP)
+      intakeP = (async () => {
+        try {
+          await intakeAll();
+          deliverLocal();
+        } catch (e) {
+          appendWorkerLog(env, `intake lane error (ignored; retried at the next tick): ${e instanceof Error ? e.message : String(e)}`, now());
+        }
+      })().finally(() => {
+        intakeP = null;
+        kick();
+      });
+    return intakeP;
+  };
+
+  const completionText = (j: JobRequest, st: JobState, publishLine: string | null): string => {
+    const s4 = completionNotice(env.worksDir, st);
+    return [`完了: ${j.job_id}「${titleOf(j)}」（${st.work_id}）。ローカルプレビュー: ${env.siteOut}（sfsh preview）${j.restricted_notice_at ? "。※Restricted の作品のため公開されません" : ""}`, ...(publishLine ? [publishLine] : []), ...(s4 ? [s4] : [])].join("\n");
+  };
+
+  /** Strictly increasing FIFO key of the publish lane (epoch ms; +1 when two builds finish in the same ms). */
+  let lastOrder = 0;
   const processMain = async (jobId: string): Promise<JobStateName | null> => {
     const loc = findJob(env, jobId);
     if (!loc || loc.job.state !== "queued") return null;
@@ -395,15 +447,12 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
       current = q;
       update(jobId, RUNNING_STATES, (x) => (x.state = q), null);
     };
-    // M6 (CP-041 finding a): identify requests received while this job runs at each of its stage boundaries,
-    // so their clarifying / merge / identified notices wait at most one stage instead of the whole job (§4.4).
+    // M6 (CP-041 finding a): identify requests received while this job runs at each of its stage boundaries, so their
+    // clarifying / merge / identified notices wait at most one stage. With one slot the boundary waits for that intake
+    // pass (the M6 behaviour); with several slots the intake lane runs beside the slots and the boundary only starts it.
     const atBoundary = async (): Promise<void> => {
-      try {
-        await intakeAll();
-        deliverLocal();
-      } catch (e) {
-        appendWorkerLog(env, `boundary intake error (ignored; retried at the next boundary): ${e instanceof Error ? e.message : String(e)}`, now());
-      }
+      if (concurrency === 1) await intakeLane();
+      else void intakeLane();
     };
     st = await runJob(st, runnerDeps({ onState, shouldStop, atBoundary }));
 
@@ -436,7 +485,7 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
     }
     if (shouldStop() && cancelled) return finishCancelled("before building");
 
-    // building
+    // building (site/build.ts serializes builds with its own lock: parallel slots wait there, not here)
     update(jobId, RUNNING_STATES, (x) => (x.state = "building"), "pipeline done; building the site");
     let lastErr = "";
     let built = false;
@@ -456,33 +505,119 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
       if (j) notifyJob(env, j, "failed", `失敗: ${jobId}「${titleOf(j)}」のサイトビルドが${BUILD_ATTEMPTS}回失敗しました（${lastErr}）`, { stage: "building", error: lastErr }, now());
       return "failed";
     }
-    let j = update(jobId, ["building"], (x) => ((x.state = "built"), (x.error = null)), `built (local preview: ${env.siteOut})`);
-    let finalState: JobStateName = "built";
-    let publishLine: string | null = null;
-    let published: { ok: boolean; summary: string; release_id: string | null } | null = null;
-    if (j && deps.publish && st.work_id && !isWorkRestricted(env.worksDir, st.work_id)) {
-      jlog(jobId, "publish start (S6: production gate open, mode auto)");
+    const j = update(jobId, ["building"], (x) => ((x.state = "built"), (x.error = null)), `built (local preview: ${env.siteOut})`);
+    if (!j) return findJob(env, jobId)?.job.state ?? null;
+    if (deps.publish && st.work_id && !isWorkRestricted(env.worksDir, st.work_id)) {
+      // AMENDMENT 13: hand over to the publish lane and free the slot ("built, waiting to publish")
+      lastOrder = Math.max(Date.now(), lastOrder + 1);
+      const order = lastOrder;
+      const w = update(jobId, ["built"], (x) => ((x.state = "publish_pending"), (x.publish_wait = { since: isoLocal(now()), order, started_at: null })), "waiting for the publish lane (one publish at a time, in build order); job slot freed");
+      if (w) {
+        kick();
+        return "publish_pending";
+      }
+    }
+    notifyJob(env, j, "completed", completionText(j, st, null), { work_id: st.work_id, preview: env.siteOut, s4: completionNotice(env.worksDir, st) ?? null, publish: null }, now());
+    return "built";
+  };
+
+  // ------------------------------------------------------------ 5. publish lane
+  /**
+   * Jobs whose public.json is written but not checked yet (compose running/done, autocheck not done): a publish now
+   * would carry an unchecked work, so the lane waits for them.
+   */
+  const unchecked = (exceptJobId: string): string[] => {
+    const out: string[] = [];
+    for (const { job } of listJobs(env, ["running"])) {
+      if (job.job_id === exceptJobId || !fs.existsSync(statePath(env.jobsDir, job.job_id))) continue;
       try {
-        published = await deps.publish({ jobId, workId: st.work_id });
+        const rs = readState(env.jobsDir, job.job_id);
+        const c = rs.stages.compose?.status;
+        if ((c === "running" || c === "done") && rs.stages.autocheck?.status !== "done") out.push(job.job_id);
+      } catch {
+        /* state file being replaced: checked again at the next tick */
+      }
+    }
+    return out;
+  };
+  const publishWaitLogged = new Set<string>();
+
+  /** Next publish_pending job (build order), or null; logs (once per job) when it has to wait for unchecked works. */
+  const nextPublishable = (): JobRequest | null => {
+    const pending = listJobs(env, ["done"])
+      .map((l) => l.job)
+      .filter((j) => j.state === "publish_pending")
+      .sort((a, b) => {
+        const oa = a.publish_wait?.order ?? Date.parse(a.publish_wait?.since ?? a.updated_at);
+        const ob = b.publish_wait?.order ?? Date.parse(b.publish_wait?.since ?? b.updated_at);
+        return oa !== ob ? oa - ob : a.job_id < b.job_id ? -1 : 1;
+      });
+    const head = pending[0];
+    if (!head) return null;
+    const wait = unchecked(head.job_id);
+    if (wait.length) {
+      const key = `${head.job_id}|${wait.join(",")}`;
+      if (!publishWaitLogged.has(key)) {
+        publishWaitLogged.add(key);
+        jlog(head.job_id, `publish waits: ${wait.join(", ")} between compose and autocheck`);
+      }
+      return null;
+    }
+    return head;
+  };
+
+  let publishP: Promise<void> | null = null;
+  const publishOne = async (jobId: string): Promise<void> => {
+    const started = update(jobId, ["publish_pending"], (x) => (x.publish_wait = { ...x.publish_wait, since: x.publish_wait?.since ?? x.updated_at, started_at: isoLocal(now()) }), null);
+    if (!started) return; // cancelled (or otherwise moved) while waiting
+    const workId = started.resolved?.work_id ?? null;
+    const st = readState(env.jobsDir, jobId);
+    let published: { ok: boolean; summary: string; release_id: string | null };
+    if (!workId || isWorkRestricted(env.worksDir, workId)) published = { ok: false, summary: `work ${workId ?? "?"} is Restricted now (held after the build); not published`, release_id: null };
+    else {
+      jlog(jobId, "publish start (S6: production gate open, mode auto; publish lane, one at a time)");
+      appendWorkerLog(env, `publish lane: start ${jobId} (${workId})`, now());
+      try {
+        published = await deps.publish!({ jobId, workId });
       } catch (e) {
         published = { ok: false, summary: (e instanceof Error ? e.message : String(e)).slice(0, 500), release_id: null };
       }
-      jlog(jobId, `publish ${published.ok ? "done" : "FAILED"}: ${published.summary}`);
-      if (published.ok) {
-        j = update(jobId, ["built"], (x) => (x.state = "published"), `published (release ${published.release_id})`) ?? j;
-        finalState = "published";
-        publishLine = `公開しました（リリース ${published.release_id}）`;
-      } else publishLine = `公開に失敗しました（ジョブは built のまま。sfsh publish で再試行できます）: ${published.summary}`;
+      appendWorkerLog(env, `publish lane: end ${jobId} ${published.ok ? "ok" : "FAILED"}${published.release_id ? ` release ${published.release_id}` : ""}`, now());
     }
-    if (j) {
-      const s4 = completionNotice(env.worksDir, st);
-      const text = [`完了: ${jobId}「${titleOf(j)}」（${st.work_id}）。ローカルプレビュー: ${env.siteOut}（sfsh preview）${j.restricted_notice_at ? "。※Restricted の作品のため公開されません" : ""}`, ...(publishLine ? [publishLine] : []), ...(s4 ? [s4] : [])].join("\n");
-      notifyJob(env, j, "completed", text, { work_id: st.work_id, preview: env.siteOut, s4: s4 ?? null, publish: published }, now());
+    jlog(jobId, `publish ${published.ok ? "done" : "FAILED"}: ${published.summary}`);
+    const fin = published.ok
+      ? update(jobId, ["publish_pending"], (x) => ((x.state = "published"), (x.publish_wait = null)), `published (release ${published.release_id})`)
+      : update(jobId, ["publish_pending"], (x) => ((x.state = "built"), (x.publish_wait = null)), `publish failed; stays built (sfsh publish retries): ${published.summary}`);
+    const finalState: JobStateName = published.ok ? "published" : "built";
+    summary.processed.push({ job_id: jobId, state: fin ? finalState : (findJob(env, jobId)?.job.state ?? finalState) });
+    if (fin) {
+      const publishLine = published.ok ? `公開しました（リリース ${published.release_id}）` : `公開に失敗しました（ジョブは built のまま。sfsh publish で再試行できます）: ${published.summary}`;
+      notifyJob(env, fin, "completed", completionText(fin, st, publishLine), { work_id: st.work_id, preview: env.siteOut, s4: completionNotice(env.worksDir, st) ?? null, publish: published }, now());
     }
-    return finalState;
+  };
+  const publishLane = (): void => {
+    if (publishP || !deps.publish || opts.signal?.aborted) return;
+    const next = nextPublishable();
+    if (!next) return;
+    publishP = (async () => {
+      try {
+        await publishOne(next.job_id);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        jlog(next.job_id, `publish lane error: ${msg}`);
+        const f = update(next.job_id, ["publish_pending"], (x) => ((x.state = "built"), (x.publish_wait = null), (x.error = `publish lane error: ${msg}`)), `publish lane error: ${msg}`);
+        summary.processed.push({ job_id: next.job_id, state: "built" });
+        if (f) notifyJob(env, f, "completed", `完了: ${f.job_id}「${titleOf(f)}」（ビルド済み）。公開段でエラー（${msg}）。sfsh publish で再試行できます`, { error: msg }, now());
+      } finally {
+        deliverLocal();
+      }
+    })().finally(() => {
+      publishP = null;
+      kick();
+    });
   };
 
-  // ------------------------------------------------------------ 5. local delivery
+  // ------------------------------------------------------------ 6. local delivery
   const deliverLocal = (): void => {
     for (const n of listPendingNotices(env)) {
       if (n.reply_to === null && !n.job_id && n.batch_id) {
@@ -501,51 +636,94 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
     }
   };
 
-  // ------------------------------------------------------------ loop
+  // ------------------------------------------------------------ scheduler loop
+  /** Wakes the loop as soon as a slot / lane finishes (instead of waiting for the next poll). */
+  let wake: (() => void) | null = null;
+  function kick(): void {
+    const w = wake;
+    wake = null;
+    w?.();
+  }
+  const slots = new Map<string, Promise<void>>();
+  let started = 0;
+
+  const runSlot = (jobId: string): Promise<void> =>
+    (async () => {
+      appendWorkerLog(env, `slot start ${jobId} (busy ${slots.size + 1}/${concurrency})`, now());
+      let state: JobStateName | null;
+      try {
+        state = await processMain(jobId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        jlog(jobId, `worker error: ${msg}`);
+        const f = update(jobId, [...RUNNING_STATES, "queued"], (x) => ((x.state = "failed"), (x.error = `worker error: ${msg}`)), `worker error: ${msg}`);
+        if (f) notifyJob(env, f, "failed", `失敗: ${f.job_id}「${titleOf(f)}」の処理中にエラー（${msg}）`, { error: msg }, now());
+        state = "failed";
+      }
+      // publish_pending is reported by the publish lane when the publish ends
+      if (state && state !== "publish_pending") summary.processed.push({ job_id: jobId, state });
+      appendWorkerLog(env, `slot end ${jobId} → ${state ?? "skipped"}`, now());
+      deliverLocal();
+    })().finally(() => {
+      slots.delete(jobId);
+      kick();
+    });
+
+  const hasReceived = (): boolean => listJobs(env, ["inbox"]).some((l) => l.job.state === "received");
+  const readyJobs = (): JobRequest[] => readyOrder(listJobs(env, ["ready"]).map((l) => l.job).filter((j) => j.state === "queued" && !slots.has(j.job_id)));
+  const maxReached = (): boolean => opts.maxJobs != null && started >= opts.maxJobs;
+
   let stop = "";
   try {
     recover();
     for (;;) {
-      if (opts.signal?.aborted) {
+      const aborted = !!opts.signal?.aborted;
+      if (!aborted) {
+        const drops = adoptInboxDrops(env, now());
+        for (const r of drops.rejected) appendWorkerLog(env, `inbox drop rejected: ${r.file}: ${r.errors.join("; ")}`, now());
+        // every received job is identified before NEW main processing starts (running slots go on meanwhile)
+        if (hasReceived() || intakeP) await intakeLane();
+        deliverLocal();
+        while (!opts.signal?.aborted && slots.size < concurrency && !maxReached()) {
+          const next = readyJobs()[0];
+          if (!next) break;
+          started++;
+          slots.set(next.job_id, runSlot(next.job_id));
+          summary.peakSlots = Math.max(summary.peakSlots, slots.size);
+        }
+        publishLane();
+      }
+      const busy = slots.size > 0 || !!publishP || !!intakeP;
+      if (aborted && !busy) {
         stop = "signal";
         break;
       }
-      const drops = adoptInboxDrops(env, now());
-      for (const r of drops.rejected) appendWorkerLog(env, `inbox drop rejected: ${r.file}: ${r.errors.join("; ")}`, now());
-      await intakeAll();
-      deliverLocal();
-      if (opts.maxJobs != null && summary.processed.length >= opts.maxJobs) {
-        stop = "max-jobs";
-        break;
-      }
-      if (opts.signal?.aborted) continue;
-      const next = readyOrder(listJobs(env, ["ready"]).map((l) => l.job).filter((j) => j.state === "queued"))[0];
-      if (next) {
-        let state: JobStateName | null;
-        try {
-          state = await processMain(next.job_id);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          jlog(next.job_id, `worker error: ${msg}`);
-          const f = update(next.job_id, [...RUNNING_STATES, "queued"], (x) => ((x.state = "failed"), (x.error = `worker error: ${msg}`)), `worker error: ${msg}`);
-          if (f) notifyJob(env, f, "failed", `失敗: ${f.job_id}「${titleOf(f)}」の処理中にエラー（${msg}）`, { error: msg }, now());
-          state = "failed";
+      if (!aborted && !busy) {
+        const publishable = !!deps.publish && listJobs(env, ["done"]).some((l) => l.job.state === "publish_pending");
+        if (maxReached() && !publishable) {
+          stop = "max-jobs";
+          break;
         }
-        if (state) summary.processed.push({ job_id: next.job_id, state });
-        deliverLocal();
-        continue;
+        if (opts.once && !hasReceived() && !readyJobs().length && !publishable) {
+          stop = "idle (once)";
+          break;
+        }
       }
-      if (opts.once) {
-        stop = "idle (once)";
-        break;
-      }
-      await sleep(pollMs, opts.signal);
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+        void sleep(pollMs, opts.signal).then(() => {
+          if (wake === resolve) wake = null;
+          resolve();
+        });
+      });
     }
   } finally {
     try {
+      // a throw out of the loop: let running slots / lanes reach their next boundary before the lock is released
+      if (slots.size || publishP || intakeP) await Promise.allSettled([...slots.values(), publishP, intakeP]);
       deliverLocal();
     } finally {
-      appendWorkerLog(env, `worker stop (${stop || "error"}); processed ${summary.processed.map((p) => `${p.job_id}:${p.state}`).join(",") || "none"}`, now());
+      appendWorkerLog(env, `worker stop (${stop || "error"}); processed ${summary.processed.map((p) => `${p.job_id}:${p.state}`).join(",") || "none"}; peak slots ${summary.peakSlots}/${concurrency}`, now());
       lock.release();
     }
   }

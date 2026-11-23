@@ -6,7 +6,8 @@
  *   queue/inbox/      received / identifying / clarifying           (S0 intake; JSON dropped here by Muse is a valid entry)
  *   queue/ready/      queued                                         (identified, waiting for the single worker)
  *   queue/running/    researching / structuring / generating / checking / building
- *   queue/done/       built / published / merged                     (merged = duplicate folded into another job, §4.4)
+ *   queue/done/       built / publish_pending / published / merged   (merged = duplicate folded into another job, §4.4;
+ *                     publish_pending = built and waiting for the single publish lane, AMENDMENT 13)
  *   queue/failed/     failed
  *   queue/held/       held
  *   queue/cancelled/  cancelled                                      (addition: terminal state of §4.4 needs a place)
@@ -37,6 +38,8 @@ export const JOB_STATES = [
   "checking",
   "building",
   "built",
+  /** AMENDMENT 13: built (site built locally) and waiting for the worker's single publish lane (one publish at a time). */
+  "publish_pending",
   "published",
   "failed",
   "cancelled",
@@ -59,6 +62,7 @@ export const DIR_OF_STATE: Record<JobStateName, QueueDir> = {
   checking: "running",
   building: "running",
   built: "done",
+  publish_pending: "done",
   published: "done",
   merged: "done",
   failed: "failed",
@@ -153,6 +157,13 @@ export interface JobRequest {
   cancel_requested: { at: string; by: Requester; origin: Origin } | null;
   /** Set when the job was accepted for a Restricted work (§4.4: processed, never published). */
   restricted_notice_at: string | null;
+  /**
+   * AMENDMENT 13: publish lane bookkeeping while the job is publish_pending. `since` = when the build finished;
+   * `order` = epoch ms of that moment, strictly increasing within the worker (the lane's FIFO key: `since` has
+   * only second precision); `started_at` = when the lane took this job (null while waiting).
+   * Absent / null in every other state (older queue files have no such field).
+   */
+  publish_wait?: { since: string; order?: number; started_at: string | null } | null;
   error: string | null;
   updated_at: string;
 }

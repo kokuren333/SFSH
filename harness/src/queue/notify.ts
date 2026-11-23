@@ -8,6 +8,7 @@ import path from "node:path";
 import { isoLocal } from "../model/callLog.ts";
 import type { QueueEnv } from "./store.ts";
 import type { Notice } from "./types.ts";
+import { renameSyncRetry } from "../util/fsRetry.ts";
 
 function dirs(env: QueueEnv) {
   return { pending: path.join(env.queueDir, "outbox", "pending"), sent: path.join(env.queueDir, "outbox", "sent") };
@@ -69,6 +70,6 @@ export function markNoticeSent(env: QueueEnv, id: string, via: string, now: Date
   n.sent_via = via;
   const tmp = path.join(d.pending, `${id}.json.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(n, null, 2) + "\n", "utf8");
-  fs.renameSync(tmp, src);
-  fs.renameSync(src, path.join(d.sent, `${id}.json`));
+  renameSyncRetry(tmp, src);
+  renameSyncRetry(src, path.join(d.sent, `${id}.json`));
 }

@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Claim } from "../research/claimTypes.ts";
 import type { SourceCard } from "../research/types.ts";
 import type { NkgSource } from "./types.ts";
+import { renameSyncRetry } from "../util/fsRetry.ts";
 
 export const NKG_FILES = {
   moduleSelection: "nkg/module_selection.json",
@@ -27,7 +28,7 @@ export function writeJson(workDir: string, rel: string, data: unknown): string {
   mkdirSync(path.dirname(abs), { recursive: true });
   const tmp = `${abs}.tmp-${process.pid}`;
   writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");
-  renameSync(tmp, abs);
+  renameSyncRetry(tmp, abs);
   return rel;
 }
 

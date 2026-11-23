@@ -5,7 +5,7 @@
  *   sfsh status [<job_id> | --batch <batch_id>] [--json]
  *   sfsh cancel <job_id> | --batch <batch_id>
  *   sfsh answer <job_id> [--pick n] [--work t] [--medium m] [--range r]
- *   sfsh worker [--once] [--poll-ms n] [--max-jobs n]
+ *   sfsh worker [--once] [--poll-ms n] [--max-jobs n] [--concurrency n]   (job slots; default harness/config/worker.json, 3)
  */
 import { getModelPort } from "../model/index.ts";
 import { createFetcher } from "../research/fetch/index.ts";
@@ -16,6 +16,7 @@ import { jobStatus, queueSummary } from "../queue/status.ts";
 import { defaultQueueEnv, ensureQueueDirs, type QueueEnv } from "../queue/store.ts";
 import type { Actor, JobInput, Origin, Priority } from "../queue/types.ts";
 import { runWorker, type WorkerDeps } from "../queue/worker.ts";
+import { loadWorkerConfig, parseConcurrency } from "../queue/workerConfig.ts";
 import { loadPublishConfig, type PublishConfig } from "../publish/config.ts";
 import { defaultPublishEnv, publishInitialized, publishSite, summarizePush } from "../publish/index.ts";
 import { batchStatus, cancelBatch } from "../queue/batch/status.ts";
@@ -26,7 +27,7 @@ const USAGE = {
   status: "usage: sfsh status [<job_id>] [--json]  |  sfsh status --batch <batch_id>",
   cancel: "usage: sfsh cancel <job_id>  |  sfsh cancel --batch <batch_id>",
   answer: "usage: sfsh answer <job_id> [--pick n] [--work t] [--medium m] [--range r]",
-  worker: "usage: sfsh worker [--once] [--poll-ms n] [--max-jobs n]",
+  worker: "usage: sfsh worker [--once] [--poll-ms n] [--max-jobs n] [--concurrency n]",
 };
 
 /** Local CLI actor = owner (§4.3). */
@@ -174,15 +175,32 @@ export function autoPublishHook(env: QueueEnv, cfgIn?: PublishConfig): WorkerDep
 }
 
 export async function workerCommand(args: string[], env: QueueEnv = defaultQueueEnv()): Promise<number> {
-  const opts: { once?: boolean; pollMs?: number; maxJobs?: number; signal?: AbortSignal } = {};
+  const opts: { once?: boolean; pollMs?: number; maxJobs?: number; concurrency?: number; signal?: AbortSignal } = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     const v = args[i + 1];
     if (a === "--once") opts.once = true;
     else if (a === "--poll-ms" && v !== undefined && Number(v) > 0) (opts.pollMs = Number(v)), i++;
     else if (a === "--max-jobs" && v !== undefined && Number.isInteger(Number(v)) && Number(v) > 0) (opts.maxJobs = Number(v)), i++;
-    else {
+    else if (a === "--concurrency" && v !== undefined) {
+      try {
+        opts.concurrency = parseConcurrency(Number(v), "--concurrency");
+      } catch (e) {
+        console.error(`${e instanceof Error ? e.message : String(e)}
+${USAGE.worker}`);
+        return 2;
+      }
+      i++;
+    } else {
       console.error(`unknown or incomplete option: ${a}\n${USAGE.worker}`);
+      return 2;
+    }
+  }
+  if (opts.concurrency === undefined) {
+    try {
+      opts.concurrency = loadWorkerConfig().max_concurrent_jobs;
+    } catch (e) {
+      console.error(`worker: harness/config/worker.json unusable: ${e instanceof Error ? e.message : String(e)}`);
       return 2;
     }
   }
@@ -198,7 +216,7 @@ export async function workerCommand(args: string[], env: QueueEnv = defaultQueue
     const s = await runWorker(env, { luna: getModelPort("luna"), haiku: getModelPort("haiku"), fetcher: createFetcher(), publish: autoPublishHook(env) }, opts);
     if (s.tookOverFrom !== null) console.log(`worker: took over a stale lock (pid ${s.tookOverFrom})`);
     for (const r of s.recovered) console.log(`worker: recovered ${r}`);
-    console.log(`worker: identified ${s.identified.length}; processed ${s.processed.map((p) => `${p.job_id}:${p.state}`).join(", ") || "none"}`);
+    console.log(`worker: concurrency ${opts.concurrency} (peak ${s.peakSlots}); identified ${s.identified.length}; processed ${s.processed.map((p) => `${p.job_id}:${p.state}`).join(", ") || "none"}`);
     return 0;
   } catch (e) {
     if (e instanceof WorkerBusyError) {

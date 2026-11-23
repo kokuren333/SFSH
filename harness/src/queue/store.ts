@@ -6,12 +6,20 @@
  *  - directory change: one fs.renameSync after the content change. A crash in between leaves the file in the old
  *    directory with the new state; reconcileDirs() (run by the worker at start-up) moves it where its state says.
  *  - job ids are reserved by creating logs/jobs/<job_id>.log with O_EXCL (CLI, bot and worker may allocate concurrently).
+ *
+ * Concurrency (AMENDMENT 13): every read-modify-write of a job file runs inside withQueueLock() — a short, cross-
+ * process lock `queue/state.lock/` (mkdir is atomic; owner `<pid>:<token>`; re-entrant inside one process; a dead
+ * owner is taken over). The worker (with several job slots), the CLI, the Discord runner and inbox drops may all
+ * touch the queue at the same time; under the lock no transition is lost (a stale read can no longer overwrite a
+ * newer state) and a job never exists in two directories. saveJob() takes the lock itself; callers that read
+ * first wrap the whole read → mutate → save in withQueueLock().
  */
 import fs from "node:fs";
 import path from "node:path";
 import { isoLocal } from "../model/callLog.ts";
 import { paths } from "../paths.ts";
 import { DIR_OF_STATE, QUEUE_DIRS, type JobRequest, type QueueDir } from "./types.ts";
+import { renameSyncRetry, sleepSync } from "../util/fsRetry.ts";
 
 export interface QueueEnv {
   /** queue/ */
@@ -108,10 +116,107 @@ export function appendJobLog(env: QueueEnv, jobId: string, msg: string, now: Dat
   fs.appendFileSync(path.join(env.jobsDir, `${jobId}.log`), `${isoLocal(now)} ${msg.replace(/\r?\n/g, " / ")}\n`, "utf8");
 }
 
+// ---------------------------------------------------------------- queue state lock (AMENDMENT 13)
+
+const LOCK_WAIT_MS = 60_000;
+const LOCK_STALE_EMPTY_MS = 5_000;
+const lockDepth = new Map<string, { token: string; depth: number }>();
+
+export function queueLockDir(env: QueueEnv): string {
+  return path.join(env.queueDir, "state.lock");
+}
+
+function ownerAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Contention counters of this process (measurement, AMENDMENT 13). */
+export const queueLockStats = { acquired: 0, waited: 0, waitedMs: 0, takenOver: 0 };
+
+function lockIsStale(dir: string, owner: string): boolean {
+  if (owner) {
+    const pid = Number(owner.split(":")[0]);
+    // our own pid while no frame of ours holds it = leftover of a crashed call; a dead pid = crashed process
+    return pid === process.pid || !ownerAlive(pid);
+  }
+  try {
+    return Date.now() - fs.statSync(dir).mtimeMs > LOCK_STALE_EMPTY_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Run `fn` (synchronous) holding the cross-process queue state lock. Re-entrant within this process (a nested call
+ * just runs). Held only for file reads/writes, never across an await, so waits are milliseconds.
+ */
+export function withQueueLock<T>(env: QueueEnv, fn: () => T): T {
+  const dir = queueLockDir(env);
+  const mine = lockDepth.get(dir);
+  if (mine) {
+    mine.depth++;
+    try {
+      return fn();
+    } finally {
+      mine.depth--;
+    }
+  }
+  fs.mkdirSync(env.queueDir, { recursive: true });
+  const token = `${process.pid}:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const t0 = Date.now();
+  let waited = false;
+  for (;;) {
+    try {
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, "owner"), token, "utf8");
+      break;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST" && code !== "EPERM" && code !== "EACCES") throw e;
+      waited = true;
+      let owner = "";
+      try {
+        owner = fs.readFileSync(path.join(dir, "owner"), "utf8");
+      } catch {
+        /* being created or removed */
+      }
+      if (lockIsStale(dir, owner)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+        queueLockStats.takenOver++;
+        continue;
+      }
+      if (Date.now() - t0 > LOCK_WAIT_MS) throw new Error(`queue state lock busy for ${LOCK_WAIT_MS / 1000}s (${dir}, owner ${owner || "?"})`);
+      sleepSync(5);
+    }
+  }
+  queueLockStats.acquired++;
+  if (waited) {
+    queueLockStats.waited++;
+    queueLockStats.waitedMs += Date.now() - t0;
+  }
+  lockDepth.set(dir, { token, depth: 1 });
+  try {
+    return fn();
+  } finally {
+    lockDepth.delete(dir);
+    try {
+      if (fs.readFileSync(path.join(dir, "owner"), "utf8") === token) fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
 function writeAtomic(file: string, data: unknown): void {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");
-  fs.renameSync(tmp, file);
+  renameSyncRetry(tmp, file);
 }
 
 /**
@@ -119,6 +224,10 @@ function writeAtomic(file: string, data: unknown): void {
  * to logs/jobs/<job_id>.log when the state or directory changed (or `note` is given).
  */
 export function saveJob(env: QueueEnv, job: JobRequest, note: string | null = null, now: Date = new Date()): JobLocation {
+  return withQueueLock(env, () => saveJobLocked(env, job, note, now));
+}
+
+function saveJobLocked(env: QueueEnv, job: JobRequest, note: string | null, now: Date): JobLocation {
   const loc = findJob(env, job.job_id);
   const prevState = loc?.job.state ?? null;
   const prevDir = loc?.dir ?? null;
@@ -131,7 +240,7 @@ export function saveJob(env: QueueEnv, job: JobRequest, note: string | null = nu
     if (loc.dir !== target) {
       const dest = jobFile(env, target, job.job_id);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.renameSync(loc.file, dest);
+      renameSyncRetry(loc.file, dest);
       file = dest;
     }
   } else {
@@ -148,6 +257,10 @@ export function saveJob(env: QueueEnv, job: JobRequest, note: string | null = nu
 
 /** Move every job file whose directory disagrees with its state (crash between content write and rename), and drop stale duplicates. */
 export function reconcileDirs(env: QueueEnv, now: Date = new Date()): string[] {
+  return withQueueLock(env, () => reconcileDirsLocked(env, now));
+}
+
+function reconcileDirsLocked(env: QueueEnv, now: Date): string[] {
   const moved: string[] = [];
   const byId = new Map<string, JobLocation[]>();
   for (const l of listJobs(env)) byId.set(l.job.job_id, [...(byId.get(l.job.job_id) ?? []), l]);
@@ -161,7 +274,7 @@ export function reconcileDirs(env: QueueEnv, now: Date = new Date()): string[] {
     }
     const target = DIR_OF_STATE[keep!.job.state];
     if (keep!.dir !== target) {
-      fs.renameSync(keep!.file, jobFile(env, target, id));
+      renameSyncRetry(keep!.file, jobFile(env, target, id));
       appendJobLog(env, id, `queue: reconciled ${keep!.dir}/ -> ${target}/ (state ${keep!.job.state})`, now);
       moved.push(`${id}: ${keep!.dir} -> ${target}`);
     }

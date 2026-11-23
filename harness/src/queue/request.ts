@@ -12,6 +12,7 @@ import { emitNotice } from "./notify.ts";
 import { parseRange } from "./range.ts";
 import { allocateJobId, appendJobLog, JOB_ID_RE, saveJob, type QueueEnv } from "./store.ts";
 import type { JobInput, JobRequest, Origin, Priority, Requester } from "./types.ts";
+import { renameSyncRetry } from "../util/fsRetry.ts";
 
 export const WORK_QUERY_MAX = 200;
 export const NOTE_MAX = 500;
@@ -151,7 +152,7 @@ export function adoptInboxDrops(env: QueueEnv, now: Date = new Date()): { adopte
     const destDir = path.join(inbox, sub?.ok ? "_adopted" : "_rejected");
     fs.mkdirSync(destDir, { recursive: true });
     const dest = path.join(destDir, sub?.ok ? `${sub.job!.job_id}__${name}` : `${isoLocal(now).replace(/[:+]/g, "")}__${name}`);
-    fs.renameSync(file, dest);
+    renameSyncRetry(file, dest);
     if (sub?.ok) {
       appendJobLog(env, sub.job!.job_id, `queue: adopted inbox drop ${name} (copy kept at ${path.relative(env.queueDir, dest)})`, now);
       adopted.push(sub.job!);

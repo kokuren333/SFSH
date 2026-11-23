@@ -28,6 +28,7 @@ const STATE_JA: Record<JobStateName, string> = {
   checking: "確認中",
   building: "ビルド中",
   built: "完了",
+  publish_pending: "ビルド済み・公開待ち",
   published: "公開済み",
   failed: "失敗",
   cancelled: "取消",

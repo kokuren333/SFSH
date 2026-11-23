@@ -30,6 +30,7 @@ export const MERGEABLE_STATES: readonly JobStateName[] = [
   "checking",
   "building",
   "built",
+  "publish_pending",
   "published",
   "held",
 ];

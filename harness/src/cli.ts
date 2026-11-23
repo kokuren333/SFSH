@@ -56,8 +56,8 @@ const COMMANDS: Record<string, CommandSpec> = {
     run: (a) => answerCommand(a),
   },
   worker: {
-    usage: "worker [--once] [--poll-ms 2000] [--max-jobs <n>]",
-    summary: "Run the single queue worker: identify all received jobs first, then process ready jobs (§4.4)",
+    usage: "worker [--once] [--poll-ms 2000] [--max-jobs <n>] [--concurrency <n>]",
+    summary: "Run the queue worker: identify received jobs first, then up to N ready jobs in parallel (N = harness/config/worker.json, default 3; publishes one at a time) (§4.4, A13)",
     run: (a) => workerCommand(a),
   },
   hold: {

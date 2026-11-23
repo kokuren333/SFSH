@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { INDEX_FIELDS, type IndexEntry, type Work, type WorksIndex } from "./types.ts";
+import { renameSyncRetry } from "../util/fsRetry.ts";
 
 export const STAGING_PREFIX = "_staging-";
 
@@ -9,7 +10,7 @@ export function writeJsonAtomic(file: string, data: unknown): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");
-  fs.renameSync(tmp, file);
+  renameSyncRetry(tmp, file);
 }
 
 export function readJsonOr<T>(file: string, fallback: T): T {

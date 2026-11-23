@@ -48,6 +48,10 @@ export function queueSummary(env: QueueEnv): StatusView {
     .filter((j) => ["researching", "structuring", "generating", "checking", "building"].includes(j.state))
     .map((j) => ({ job: j, stage: j.state === "building" ? "build" : currentStage(stateFile(env, j.job_id)) }));
   const inbox = jobs.filter((j) => j.state === "received" || j.state === "identifying" || j.state === "clarifying");
+  // AMENDMENT 13: built and waiting for the single publish lane (build order)
+  const publishWait = jobs
+    .filter((j) => j.state === "publish_pending")
+    .sort((a, b) => (a.publish_wait?.order ?? Date.parse(a.publish_wait?.since ?? a.updated_at)) - (b.publish_wait?.order ?? Date.parse(b.publish_wait?.since ?? b.updated_at)) || (a.job_id < b.job_id ? -1 : 1));
   const owner = readLockOwner(env);
   const worker = owner ? { pid: owner.pid, alive: pidAlive(owner.pid) } : null;
 
@@ -57,6 +61,10 @@ export function queueSummary(env: QueueEnv): StatusView {
   if (running.length) {
     lines.push("running:");
     for (const r of running) lines.push(`  ${oneLine(r.job)} — stage ${r.stage ?? "-"}${r.job.cancel_requested ? " (cancel requested)" : ""}`);
+  }
+  if (publishWait.length) {
+    lines.push("publish_pending (built, publishing one at a time; next first):");
+    publishWait.forEach((j, i) => lines.push(`  ${i + 1}. ${oneLine(j)}${j.publish_wait?.started_at ? ` — publishing since ${j.publish_wait.started_at}` : ` — waiting since ${j.publish_wait?.since ?? "?"}`}`));
   }
   if (ready.length) {
     lines.push("ready (next first):");
@@ -75,6 +83,7 @@ export function queueSummary(env: QueueEnv): StatusView {
       running: running.map((r) => ({ job_id: r.job.job_id, state: r.job.state, stage: r.stage, cancel_requested: !!r.job.cancel_requested })),
       ready: ready.map((j) => ({ job_id: j.job_id, priority: j.options.priority, received_at: j.received_at, work_id: j.resolved?.work_id ?? null, batch: j.batch })),
       inbox: inbox.map((j) => ({ job_id: j.job_id, state: j.state, work_query: j.work_query })),
+      publish_pending: publishWait.map((j) => ({ job_id: j.job_id, since: j.publish_wait?.since ?? null, publishing_since: j.publish_wait?.started_at ?? null })),
     },
   };
 }
