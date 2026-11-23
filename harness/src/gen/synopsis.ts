@@ -248,7 +248,7 @@ export async function writeSynopsis(ctx: StageContext): Promise<StageResult> {
   let calls = 0;
 
   // 1) plan + intro
-  const planOut = await ctx.haiku.call({ task: "s3.synopsis.plan", prompt: synopsisPlanPrompt({ title, material, target }), schema: SYNOPSIS_PLAN_SCHEMA, jobId: ctx.jobId, timeoutMs: S3_TIMEOUT_MS });
+  const planOut = await ctx.haiku.call({ task: "s3.synopsis.plan", prompt: synopsisPlanPrompt({ title, material, target, repairNotes: ctx.repair?.synopsis?.notes }), schema: SYNOPSIS_PLAN_SCHEMA, jobId: ctx.jobId, timeoutMs: S3_TIMEOUT_MS });
   calls++;
   const plan = planFrom(planOut.output);
   if (!plan.chapters.length) throw new Error("S3 synopsis: the plan has no chapters");
@@ -262,7 +262,7 @@ export async function writeSynopsis(ctx: StageContext): Promise<StageResult> {
     try {
       const r = await ctx.haiku.call({
         task: "s3.synopsis.chapter",
-        prompt: synopsisChapterPrompt({ title, material, intro: introText, plan: plan.chapters, index: k, introducedBefore, focus: chapterFocus(pw, claims, plan.chapters[k]!) }),
+        prompt: synopsisChapterPrompt({ title, material, intro: introText, plan: plan.chapters, index: k, introducedBefore, focus: chapterFocus(pw, claims, plan.chapters[k]!), repairNotes: ctx.repair?.synopsis?.notes }),
         schema: SYNOPSIS_CHAPTER_SCHEMA,
         jobId: ctx.jobId,
         timeoutMs: S3_TIMEOUT_MS,

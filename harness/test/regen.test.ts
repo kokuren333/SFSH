@@ -149,7 +149,7 @@ test("regen: write → compose → autocheck from saved research, previous outpu
     const { result: rec, fetches } = await withFetchTrap(() => runRegen(GEN_WORK_ID, {}, s.deps()));
     assert.equal(rec.ok, true, rec.error ?? "");
     assert.equal(fetches, 0, "no HTTP request");
-    assert.deepEqual(rec.stages.map((r) => `${r.stage}:${r.status}`), ["write:done", "compose:done", "autocheck:done"]);
+    assert.deepEqual(rec.stages.map((r) => `${r.stage}:${r.status}`), ["write:done", "compose:done", "autocheck:done", "conform:done"]);
     const writes = s.calls.filter((c) => c.req.task === "s3.write").length;
     assert.ok(writes >= 3, "v2: frame + essay pages written as parallel calls");
     const pageCalls = s.calls.filter((c) => !c.req.task.startsWith("s3.synopsis"));
@@ -277,7 +277,7 @@ test("regen: a failing stage stops the run (exit 3), keeps the previous outputs 
     const recFile = fs.readdirSync(path.join(s.root, "logs", "regen")).filter((f) => f.endsWith(".json")).sort().pop()!;
     const rec = JSON.parse(fs.readFileSync(path.join(s.root, "logs", "regen", recFile), "utf8"));
     assert.equal(rec.ok, false);
-    assert.deepEqual(rec.stages.map((r: { stage: string; status: string; attempts: number }) => `${r.stage}:${r.status}:${r.attempts}`), ["write:failed:2", "compose:skipped:0", "autocheck:skipped:0"]);
+    assert.deepEqual(rec.stages.map((r: { stage: string; status: string; attempts: number }) => `${r.stage}:${r.status}:${r.attempts}`), ["write:failed:2", "compose:skipped:0", "autocheck:skipped:0", "conform:skipped:0"]);
     assert.ok(fs.existsSync(path.join(s.dir, rec.backup_dir, "gen/pages/overview.json")));
   } finally {
     fs.rmSync(s.root, { recursive: true, force: true });
@@ -336,7 +336,7 @@ test("CLI: regen is listed in help; missing args / unknown option → 2; real ru
   console.error = (...a: unknown[]) => void errs.push(a.join(" "));
   try {
     assert.equal(await main(["help"]), 0);
-    assert.ok(outs.join("\n").includes("regen <work_id> [--stages write,compose,autocheck] [--parts pages,synopsis] [--json]"));
+    assert.ok(outs.join("\n").includes("regen <work_id> [--stages write,compose,autocheck,conform] [--parts pages,synopsis] [--json]"));
     assert.equal(await main(["regen"]), 2);
     assert.equal(await main(["regen", GEN_WORK_ID, "--bogus"]), 2);
     assert.equal(await main(["regen", GEN_WORK_ID]), 2);

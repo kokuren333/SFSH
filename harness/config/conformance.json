@@ -1,0 +1,10 @@
+{
+  "items": {
+    "synopsis_chars": { "mode": "enforce", "repair_max": 2 },
+    "coverage": { "mode": "warn", "repair_max": 2 },
+    "figures": { "mode": "warn", "repair_max": 2 },
+    "regression": { "mode": "enforce", "repair_max": 2 },
+    "rights": { "mode": "enforce", "repair_max": 0 }
+  },
+  "regression": { "max_element_drop_ratio": 0.05 }
+}

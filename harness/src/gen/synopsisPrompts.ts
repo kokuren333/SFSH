@@ -119,7 +119,15 @@ export interface SynopsisPlanChapter {
   target_chars: number;
 }
 
-export function synopsisPlanPrompt(o: { title: string; material: string; target: readonly [number, number] }): string {
+/** AMENDMENT 15: shape-only note of a conformance repair (the measured shortfall), appended to the plan / chapter prompts. */
+export function repairNoteBlock(notes: readonly string[] | undefined): string {
+  return notes && notes.length ? `
+# 前回の版の形の不足（要件の修復。内容・視点・語り口は自由のまま、足りない分だけを足す）
+${notes.map((n) => `- ${n}`).join(String.fromCharCode(10))}
+` : "";
+}
+
+export function synopsisPlanPrompt(o: { title: string; material: string; target: readonly [number, number]; repairNotes?: readonly string[] }): string {
   return `あなたは物語の要約サイトの執筆者です。作品『${o.title}』の「あらすじ（全編・ネタバレ）」を書く前に、章立ての計画と導入文を作ってください。このページを読めば、作品を見ていない人にも物語の始まりから結末までの流れが分かるようにします。
 
 ${SYNOPSIS_RULES}
@@ -135,7 +143,7 @@ ${SYNOPSIS_RULES}
    - gist: その章で起きることの要点（全角120字以内。執筆担当への指示として、出来事の順と因果を書く）。
    - target_chars: その章の目標字数（全角${span(SYNOPSIS_SPEC.chapterChars)}の範囲で、素材の量に応じて配分）。
    章の目標字数の合計は、素材が足りる範囲で 全角${span(o.target)}字を目安にする。素材が足りないのに目標を大きくしない（水増しの原因になる）。
-
+${repairNoteBlock(o.repairNotes)}
 # 素材（要素は ID で参照する。claims は調査メモで、ID は based_on に入れない）
 ${o.material}
 `;
@@ -150,6 +158,8 @@ export function synopsisChapterPrompt(o: {
   introducedBefore: string[];
   /** JSON of this chapter's own material (assigned events + linked elements + assigned claims). */
   focus?: string;
+  /** AMENDMENT 15: conformance repair notes (shape only). */
+  repairNotes?: readonly string[];
 }): string {
   const ch = o.plan[o.index]!;
   const elsewhere = o.plan.flatMap((c, i) => (i === o.index ? [] : c.event_ids)).filter((id) => !ch.event_ids.includes(id));
@@ -162,7 +172,8 @@ ${SYNOPSIS_RULES}
 - 目標は全角 約${Math.round(ch.target_chars)}字（その8割以上を目安にする。ただし素材にない事柄を足して届かせることはしない）。${span(SYNOPSIS_SPEC.sectionsPerChapter)}節（ブロック）に分け、各節に小見出し（heading）を付け、各節は2〜5段落。
 - この章で語る出来事（物語の順）: ${ch.event_ids.join(", ") || "（指定なし。gist に従う）"}。出来事ごとに、素材にある範囲で (1) その時点の状況と前提、(2) 誰が何を望み・恐れて動いたか、(3) 何が起きたか、(4) その結果と次の出来事へのつながり、を順に説明する。
 - 下の「この章の素材」に挙げた項目（出来事・動機・変化・ルール・関係・伏線・感情・調査メモ）は、この章の本文にすべて織り込む。全体の素材のうち、この章の範囲に入るものも使ってよい。
-- この章の要点: ${ch.gist}
+- この章の要点: ${ch.gist}${o.repairNotes?.length ? `
+- （要件の修復）前回の版はあらすじ全体が規模別の目安に届かなかった。この章の目標字数に届くよう、素材にある出来事の前提・動機・結果を省略せずに説明する（素材にない細部は足さない）。` : ""}
 - この章で初めて紹介する人物: ${ch.introduces.join("、") || "なし"}（名前・立場・関係を文中で紹介する）。
 - すでに前の章で紹介済みの人物: ${o.introducedBefore.join("、") || "なし"}（名前だけで呼び、立場や経歴を説明し直さない）。
 - 他の章が語る出来事（${elsewhere.join(", ") || "なし"}）は、この章では詳しく語らない（前後のつながりとして一文で触れる程度）。章の最初で前の章の内容を繰り返さず、章の終わりで次の章の内容を先取りしない。

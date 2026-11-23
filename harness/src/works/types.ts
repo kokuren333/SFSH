@@ -52,6 +52,24 @@ export interface Work {
   coverage_label?: string;
   spoiler_max?: "none" | "mid" | "ending";
   has_matrix?: boolean;
+  /**
+   * AMENDMENT 15: the last run's candidate did not meet an `enforce` requirement after the repairs ("built, publish
+   * held"). gen/public.json holds the previous published version (or is absent for a work never published) and the
+   * candidate waits in gen/public.held.json until `sfsh release <work_id>` (or a later run that conforms).
+   */
+  conformance_hold?: ConformanceHold | null;
+}
+
+export interface ConformanceHold {
+  job_id: string;
+  at: string;
+  /** enforce items still short after the repairs */
+  items: string[];
+  /** one line per shortfall (Japanese, for notices) */
+  shortfalls: string[];
+  report: string;
+  /** what gen/public.json holds while held */
+  public_json: "previous_published" | "absent";
 }
 
 /** One INDEX.json entry: exactly the §4.6 fields. */

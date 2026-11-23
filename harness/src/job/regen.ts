@@ -1,5 +1,5 @@
 /**
- * AMENDMENT 09: re-run the S3/S4 stages `write` → `compose` → `autocheck` for one existing work, from the saved
+ * AMENDMENT 09: re-run the S3/S4 stages `write` → `compose` → `autocheck` (→ `conform`, AMENDMENT 15) for one existing work, from the saved
  * research only (nkg/, gen/projection.json, research/claims.json, saved raw source text for the 30-char guard).
  *
  * - Reuses the job runner's stage functions (`offlineStage`) — no stage logic lives here.
@@ -23,6 +23,7 @@ import type { BudgetState, Fetcher } from "../research/types.ts";
 import { STAGING_PREFIX, readWork, rebuildIndex } from "../works/store.ts";
 import { WRITE_PART_NAMES, type StageContext, type StageResult, type WritePartName } from "./context.ts";
 import { MAX_ATTEMPTS, OFFLINE_STAGES, offlineStage, type OfflineStageName } from "./runner.ts";
+import { runConform } from "./conform.ts";
 
 export { OFFLINE_STAGES as REGEN_STAGES };
 export type RegenStageName = OfflineStageName;
@@ -38,6 +39,8 @@ export const REGEN_BACKUP_ITEMS = [
   "check",
   "work.json",
   "nkg/review_summary.json",
+  // AMENDMENT 15: conformance hold (candidate kept aside while gen/public.json holds the previous published version)
+  "gen/public.held.json",
 ] as const;
 export const BACKUP_PREFIX = "_backup-";
 
@@ -173,7 +176,7 @@ export function backupWork(workDir: string, stamp: string, meta: Record<string, 
   for (const item of REGEN_BACKUP_ITEMS) {
     const src = path.join(workDir, item);
     if (!fs.existsSync(src)) {
-      missing.push(item);
+      if (item !== "gen/public.held.json") missing.push(item); // A15: present only while a conformance hold is on
       continue;
     }
     fs.cpSync(src, path.join(abs, item), { recursive: true, errorOnExist: false });
@@ -297,7 +300,22 @@ export async function runRegen(workId: string, opts: RegenOptions, deps: RegenDe
         const rec = records.find((r) => r.stage === name)!;
         const base = offlineStage(name);
         // compose rewrites works/INDEX.json from every work.json: serialize it across regen processes.
-        const fn = name === "compose" ? (c: StageContext) => withDirLock(indexLock, () => base(c), 5 * 60_000) : base;
+        const lockedCompose = (c: StageContext) => withDirLock(indexLock, () => offlineStage("compose")(c), 5 * 60_000);
+        const fn =
+          name === "compose"
+            ? lockedCompose
+            : name === "conform"
+              ? // AMENDMENT 15: the synopsis repair re-runs write → compose (under the INDEX lock) → autocheck
+                (c: StageContext) =>
+                  runConform(c, {
+                    scope: "regen",
+                    run: (n, cc) => {
+                      if (n === "compose") return lockedCompose(cc);
+                      if (n !== "write" && n !== "autocheck") throw new Error(`conform (regen): stage ${n} is outside regen`);
+                      return offlineStage(n)(cc);
+                    },
+                  })
+              : base;
         let ok = false;
         while (rec.attempts < maxAttempts && !ok) {
           rec.attempts++;

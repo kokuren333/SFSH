@@ -17,6 +17,7 @@ import { performance } from "node:perf_hooks";
 import { isoLocal } from "../model/callLog.ts";
 import { readIndex, readWork, rebuildIndex, workDirOf, workExists, writeJsonAtomic, writeWork } from "./store.ts";
 import type { Work, WorkHistoryEntry } from "./types.ts";
+import { releaseConformanceHold } from "../check/conformance.ts";
 
 export const DEFAULT_ACTOR = "owner(cli)";
 /** takedown / purge without a publish target (publish/ not initialized → nothing has been pushed anywhere). */
@@ -297,11 +298,15 @@ export function releaseWork(opts: OpsOptions): OpsResult {
   const now = opts.now ?? (() => new Date());
   const actor = opts.actor ?? DEFAULT_ACTOR;
   const reason = opts.reason?.trim() || null;
-  const { dir, work } = loadWork(opts.worksDir, opts.workId);
+  const { dir } = loadWork(opts.worksDir, opts.workId);
   const at = now();
+  // AMENDMENT 15: a conformance hold ("built, publish held") is released by the same command: the held candidate
+  // (gen/public.held.json) becomes gen/public.json and goes out with the next publish.
+  const conf = releaseConformanceHold(dir, actor, reason, at);
+  const work = readWork(dir);
   const prev = work.publish_mode;
   const jobs = heldJobs(opts.jobsDir, opts.workId);
-  const detail = `${prev === "Public" ? "already Public (release re-recorded)" : "Restricted -> Public"}; published by the next build; ${jobSummary(jobs)}`;
+  const detail = `${prev === "Public" ? (conf.released ? "Public" : "already Public (release re-recorded)") : "Restricted -> Public"}; ${conf.released ? `${conf.detail}; ` : ""}published by the next build; ${jobSummary(jobs)}`;
   const entry = historyEntry(at, "release", actor, reason, detail);
   setMode(dir, work, "Public", entry);
   rebuildIndex(opts.worksDir);

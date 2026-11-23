@@ -408,7 +408,9 @@ export async function refact(ctx: StageContext): Promise<StageResult> {
   const added = last?.new_active_claims ?? 0;
   const outputs = new Set<string>(["research/coverage.json"]);
   const metrics: Record<string, number | string> = { new_claims_from_gapfill: added, rebuilt: 0 };
-  if (added > 0) {
+  // AMENDMENT 15: a conformance repair rebuilds the fact layer with raised event minimums even without new claims
+  if (added > 0 || ctx.repair?.fact) {
+    if (ctx.repair?.fact) metrics.repair_attempt = ctx.repair.attempt;
     for (const [name, fn] of [["modules", selectModules], ["phases", buildPhases], ["fact", (c: StageContext) => buildFactLayer(c, REFACT_REVIEW_ROUNDS)]] as const) {
       const r = await fn(ctx);
       r.outputs.forEach((x) => outputs.add(x));

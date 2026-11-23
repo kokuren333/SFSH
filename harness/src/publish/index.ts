@@ -13,6 +13,7 @@ import { performance } from "node:perf_hooks";
 import { isoLocal } from "../model/callLog.ts";
 import { paths } from "../paths.ts";
 import { appendRawLedgerLine } from "../works/ops.ts";
+import { PUBLISHED_COPY, savePublishedCopy } from "../check/conformance.ts";
 import { verifyDist, type VerifyReport } from "./verify.ts";
 import { loadPublishConfig, resolveTarget, GateClosedError, type PublishConfig, type PublishTarget } from "./config.ts";
 import { withDirLock } from "./lock.ts";
@@ -176,12 +177,13 @@ function modelIdsForJob(callLogDir: string, jobId: string | null): string[] {
   return [...ids].sort();
 }
 
-function latestRelease(dir: string): { content_hash?: string } | null {
+function latestRelease(dir: string): { content_hash?: string; release_id?: string } | null {
   if (!fs.existsSync(dir)) return null;
-  const n = fs.readdirSync(dir).filter((x) => x.endsWith(".json")).sort().pop();
+  // release records only (<release_id>.json); A15 keeps published.public.json / published.meta.json beside them
+  const n = fs.readdirSync(dir).filter((x) => /^\d{8}-\d+(?:-\d+)?\.json$/.test(x)).sort().pop();
   if (!n) return null;
   try {
-    return JSON.parse(fs.readFileSync(path.join(dir, n), "utf8")) as { content_hash?: string };
+    return JSON.parse(fs.readFileSync(path.join(dir, n), "utf8")) as { content_hash?: string; release_id?: string };
   } catch {
     return null;
   }
@@ -221,8 +223,27 @@ function writeWorkReleases(env: PublishEnv, releaseId: string, at: Date, commit:
         advisory_count: Array.isArray(report.advisory) ? report.advisory.length : null,
         advisory_counts: report.advisory_counts ?? null,
         previous_content_hash: prev?.content_hash ?? null,
+        // AMENDMENT 15: the published public.json is kept as the baseline of the next regression check
+        public_copy: null as string | null,
+        shape: null as unknown,
       };
+      try {
+        const shape = savePublishedCopy(path.join(env.worksDir, id), releaseId, at);
+        if (shape) {
+          rec.public_copy = PUBLISHED_COPY;
+          rec.shape = { elements: shape.elements, figures: shape.figures, synopsis: shape.synopsis };
+        }
+      } catch {
+        /* the copy is a convenience for the regression check; the publish itself is done */
+      }
       fs.writeFileSync(record, JSON.stringify(rec, null, 2) + "\n", "utf8");
+    } else if (!fs.existsSync(path.join(env.worksDir, id, PUBLISHED_COPY))) {
+      // AMENDMENT 15 bootstrap: unchanged since the last release (same content hash) → gen/public.json is what is online
+      try {
+        savePublishedCopy(path.join(env.worksDir, id), prev?.release_id ?? releaseId, at, "bootstrap: unchanged since the last release");
+      } catch {
+        /* see above */
+      }
     }
     out.push({ work_id: id, content_hash: contentHash, files: files.length, changed, record: record ? path.relative(env.repoRoot, record).replace(/\\/g, "/") : null });
   }

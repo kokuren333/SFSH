@@ -19,7 +19,7 @@
  *     folders; a cancel request stops the run at the next stage boundary.
  *  5. publish lane (one at a time): publish_pending jobs in the order their builds finished (publish_wait.since)
  *     take the publish lock one by one (deps.publish → snapshot + push) → published, or built when the publish
- *     fails. The lane waits while another job sits between compose and autocheck (its public.json is not checked
+ *     fails. The lane waits while another job sits between compose and conform (A15; autocheck before A15) (its public.json is not checked
  *     yet), so a publish never carries a half-checked work.
  *  6. notices with reply_to null (CLI / Muse) are written to logs/jobs/<job_id>.log and moved to outbox/sent (via "local").
  * Every job-file transition is a fresh read → mutate → save under the queue state lock (store.withQueueLock), so
@@ -32,6 +32,7 @@ import { isoLocal } from "../model/callLog.ts";
 import { build as siteBuild } from "../site/build.ts";
 import {
   completionNotice,
+  conformanceHeld,
   newJobState,
   readState,
   runJob,
@@ -104,7 +105,7 @@ export function stateOfStage(name: StageName): JobStateName {
   // AMENDMENT 12: gapfill / refact run inside the NKG build (after fact) and stay "structuring" (monotonic queue states)
   if (["search_plot", "search_r1", "claims_r1", "review_r1", "followup"].includes(name)) return "researching";
   if (["tags", "project", "write", "compose"].includes(name)) return "generating";
-  if (name === "autocheck") return "checking";
+  if (name === "autocheck" || name === "conform") return "checking";
   return "structuring";
 }
 
@@ -507,7 +508,11 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
     }
     const j = update(jobId, ["building"], (x) => ((x.state = "built"), (x.error = null)), `built (local preview: ${env.siteOut})`);
     if (!j) return findJob(env, jobId)?.job.state ?? null;
-    if (deps.publish && st.work_id && !isWorkRestricted(env.worksDir, st.work_id)) {
+    // AMENDMENT 15: a candidate held by the conformance stage is not published ("built, publish held"); the notice
+    // carries the shortfall and the release command (sfsh release <work_id>, then sfsh publish).
+    const held = conformanceHeld(env.worksDir, st);
+    if (held) jlog(jobId, `conformance: publish held (gen/public.held.json); release with sfsh release ${st.work_id}`);
+    if (deps.publish && st.work_id && !held && !isWorkRestricted(env.worksDir, st.work_id)) {
       // AMENDMENT 13: hand over to the publish lane and free the slot ("built, waiting to publish")
       lastOrder = Math.max(Date.now(), lastOrder + 1);
       const order = lastOrder;
@@ -533,7 +538,8 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
       try {
         const rs = readState(env.jobsDir, job.job_id);
         const c = rs.stages.compose?.status;
-        if ((c === "running" || c === "done") && rs.stages.autocheck?.status !== "done") out.push(job.job_id);
+        // AMENDMENT 15: the window lasts until the conformance stage is done (a held candidate is swapped out there)
+        if ((c === "running" || c === "done") && rs.stages.conform?.status !== "done") out.push(job.job_id);
       } catch {
         /* state file being replaced: checked again at the next tick */
       }
@@ -559,7 +565,7 @@ export async function runWorker(env: QueueEnv, depsIn: WorkerDeps, opts: WorkerO
       const key = `${head.job_id}|${wait.join(",")}`;
       if (!publishWaitLogged.has(key)) {
         publishWaitLogged.add(key);
-        jlog(head.job_id, `publish waits: ${wait.join(", ")} between compose and autocheck`);
+        jlog(head.job_id, `publish waits: ${wait.join(", ")} between compose and conform`);
       }
       return null;
     }

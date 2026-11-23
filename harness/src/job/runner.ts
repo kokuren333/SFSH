@@ -18,6 +18,8 @@ import { readWork } from "../works/store.ts";
 import { composePublic, projectPublic, suggestTags, writePages, writeSynopsis } from "../gen/index.ts";
 import { summarizeReviews } from "../nkg/reviewSummary.ts";
 import { autoCheck, formatNotice } from "../check/index.ts";
+import { readReport as readConformanceReport } from "../check/conformance.ts";
+import { runConform } from "./conform.ts";
 import type { StageContext, StageResult } from "./context.ts";
 import { renameSyncRetry } from "../util/fsRetry.ts";
 
@@ -53,6 +55,8 @@ export const STAGES = [
   "compose",
   // S4 (M3): automatic check A-1/A-2 (fix only the matching parts) + advisory report — never stops the work (P-1)
   "autocheck",
+  // AMENDMENT 15: requirement conformance (shape only) + repair loop; enforce shortfalls → "built, publish held"
+  "conform",
 ] as const;
 export type StageName = (typeof STAGES)[number];
 
@@ -240,7 +244,7 @@ function workBrief(workDir: string) {
  * S3/S4 stages that only read existing research / NKG / projection outputs and never search or fetch
  * (AMENDMENT 09: `sfsh regen` re-runs them for an existing work). The job runner and regen share these functions.
  */
-export const OFFLINE_STAGES = ["write", "compose", "autocheck"] as const satisfies readonly StageName[];
+export const OFFLINE_STAGES = ["write", "compose", "autocheck", "conform"] as const satisfies readonly StageName[];
 export type OfflineStageName = (typeof OFFLINE_STAGES)[number];
 
 export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Promise<StageResult> {
@@ -268,12 +272,20 @@ export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Pro
       return composePublic;
     case "autocheck":
       return autoCheck;
+    case "conform":
+      // regen scope: saved research only — the repair can re-plan the synopsis; deeper repairs are recorded as unrepairable
+      return (ctx) => runConform(ctx, { scope: "regen", run: (n, c) => offlineStage(asOffline(n))(c) });
   }
+}
+
+function asOffline(n: string): OfflineStageName {
+  if (!(OFFLINE_STAGES as readonly string[]).includes(n) || n === "conform") throw new Error(`conform (regen): stage ${n} is outside regen`);
+  return n as OfflineStageName;
 }
 
 const ROUND1_ASPECTS = ["bibliographic", "M01", "M03", "M02", "M06", "M07", "M10", "M12", "M05", "M08", "M09", "M04", "M11"];
 
-function defaultStage(name: Exclude<StageName, "identify">, st: JobState): (ctx: StageContext) => Promise<StageResult> {
+function defaultStage(name: Exclude<StageName, "identify">, st: JobState, overrides?: RunnerDeps["stageOverrides"]): (ctx: StageContext) => Promise<StageResult> {
   switch (name) {
     case "search_plot":
       return (ctx) => runPlotSearch(ctx, { work: workBrief(ctx.workDir) });
@@ -318,6 +330,17 @@ function defaultStage(name: Exclude<StageName, "identify">, st: JobState): (ctx:
     case "compose":
     case "autocheck":
       return offlineStage(name);
+    case "conform":
+      // AMENDMENT 15: job scope — the repairs re-run this job's own stage functions (overrides included)
+      return (ctx) =>
+        runConform(ctx, {
+          scope: "job",
+          run: (n, c) => {
+            if (!(STAGES as readonly string[]).includes(n) || n === "identify" || n === "conform") throw new Error(`conform: cannot re-run stage ${n}`);
+            const sn = n as Exclude<StageName, "identify" | "conform">;
+            return (overrides?.[sn] ?? defaultStage(sn, st, overrides))(c);
+          },
+        });
   }
 }
 
@@ -394,7 +417,17 @@ export function completionNotice(worksDir: string, st: JobState): string | null 
   if (!st.work_id || st.stages.autocheck?.status !== "done") return null;
   const f = path.join(worksDir, st.work_id, "check", "report.json");
   if (!fs.existsSync(f)) return null;
-  return formatNotice(JSON.parse(fs.readFileSync(f, "utf8")).notice);
+  const s4 = formatNotice(JSON.parse(fs.readFileSync(f, "utf8")).notice);
+  // AMENDMENT 15: the conformance result of this job (held: the shortfall and how to release)
+  const c = st.stages.conform?.status === "done" ? readConformanceReport(path.join(worksDir, st.work_id)) : null;
+  return c && c.job_id === st.job_id && c.notice.length ? [s4, ...c.notice].join(String.fromCharCode(10)) : s4;
+}
+
+/** AMENDMENT 15: this job ended with its work's candidate held by the conformance stage (built, not published). */
+export function conformanceHeld(worksDir: string, st: JobState): boolean {
+  if (!st.work_id) return false;
+  const c = readConformanceReport(path.join(worksDir, st.work_id));
+  return !!c && c.job_id === st.job_id && c.outcome === "held";
 }
 
 const HOLD_EVENTS = new Set(["hold", "takedown", "purge"]);
@@ -447,7 +480,7 @@ export async function runJob(st: JobState, deps: RunnerDeps): Promise<JobState> 
       log(`held before stage ${name}: work ${st.work_id} is Restricted (${heldBy})`);
       return st;
     }
-    st.state = name === "identify" ? "identifying" : ["search_plot", "search_r1", "claims_r1", "review_r1", "followup"].includes(name) ? "researching" : ["tags", "project", "write", "compose"].includes(name) ? "generating" : name === "autocheck" ? "checking" : "structuring";
+    st.state = name === "identify" ? "identifying" : ["search_plot", "search_r1", "claims_r1", "review_r1", "followup"].includes(name) ? "researching" : ["tags", "project", "write", "compose"].includes(name) ? "generating" : name === "autocheck" || name === "conform" ? "checking" : "structuring";
 
     let ok = false;
     while (rec.attempts < MAX_ATTEMPTS) {
@@ -540,7 +573,7 @@ async function runStage(name: Exclude<StageName, "identify">, st: JobState, deps
     frames: deps.frames,
     reviewRounds: deps.reviewRounds,
   };
-  const fn = deps.stageOverrides?.[name] ?? defaultStage(name, st);
+  const fn = deps.stageOverrides?.[name] ?? defaultStage(name, st, deps.stageOverrides);
   const r = await fn(ctx);
   writeBudget(workDir, st.budget);
   writeJobBudget(workDir, st.job_id, st.budget);

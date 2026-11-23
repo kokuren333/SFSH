@@ -30,6 +30,23 @@ export interface StageContext {
   frames?: FramePlan;
   /** AMENDMENT 12: review rounds of the S2 fact / interp layers for this run (1..2, §3.3). Absent = REVIEW_MAX_ROUNDS. */
   reviewRounds?: number;
+  /**
+   * AMENDMENT 15: shape-only hints for a conformance repair run (check/conformance.ts). Only counts / presence
+   * ("at least N events", "the reverse plot needs an outcome") — never an angle, a reading or a wording (P-1).
+   */
+  repair?: RepairHints;
+}
+
+/** AMENDMENT 15: hints handed to the stages re-run by the conformance repair loop (absent in normal runs). */
+export interface RepairHints {
+  /** attempt number of the repair (1..) */
+  attempt: number;
+  /** refact: rebuild the fact layer even when gapfill added no claims, with these minimum counts */
+  fact?: { minEvents: number; minEventsPerPhase: number; minEventsLastPhase: number; notes: string[] };
+  /** interp: minimum counts / presence for the interpretive layer */
+  interp?: { notes: string[] };
+  /** synopsis: re-plan from the chapter plan with the measured shortfall */
+  synopsis?: { previousChars: number; target: readonly [number, number]; unassignedEventIds: string[]; notes: string[] };
 }
 
 export const WRITE_PART_NAMES = ["pages", "synopsis"] as const;

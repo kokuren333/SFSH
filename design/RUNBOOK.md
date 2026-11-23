@@ -28,7 +28,7 @@
 | 処理する | `worker`（常駐。止めるときは Ctrl+C で各ジョブが次の段の境目で停止）または `worker --once`（やることが無くなったら終了）。並行数は `harness/config/worker.json` の `max_concurrent_jobs`（既定3、1〜8）、1回だけ変えるなら `--concurrency n` | 受付済みの指示はまず同定され、その後最大 N 件が並行に S1〜S4 → ビルド → 公開待ち → 公開（公開は1件ずつ、完成順）。聞き返し中のジョブは枠を使わない。1作品の目安は 35〜45 分（3件の連投でも並行に進む）。Discord からは `start_worker`（タスク SFSHWORKER）で起動し、統括ジョブの実行中でも起動できる。段の中の並行幅は `harness/config/parallel.json` の `stages`（既定6）、全ジョブ・全プロセスで同時に動くモデル呼び出しの上限は同じファイルの `global_model_calls`（既定6。PC が重いときはここを下げる。使用中のスロットは `logs/model-slots/`）（A14） |
 | 聞き返しに答える | `status <job_id>` で候補を見て `answer <job_id> --pick <n>`（または `--work`／`--medium`／`--range`） | ジョブが `queued` に進む |
 | 取り消す | `cancel <job_id>`（バッチは `cancel --batch <batch_id>`） | `queued` 以前は即時、実行中は次の段の境目で `cancelled` |
-| 既存作品の文章だけ作り直す（再調査なし） | `regen <work_id>` → `publish` | 執筆・組版・自動確認だけを保存済みの調査から再実行する（検索・取得 0）。前の状態は `works/<id>/gen/_backup-<時刻>/`。worker と同時に動かさない |
+| 既存作品の文章だけ作り直す（再調査なし） | `regen <work_id>` → `publish` | 執筆・組版・自動確認・要件適合（A15、2.5）だけを保存済みの調査から再実行する（検索・取得 0）。要件適合で公開保留になったら 2.5。前の状態は `works/<id>/gen/_backup-<時刻>/`。worker と同時に動かさない |
 | あらすじ（全編・ネタバレ）だけ作り直す（A11） | `regen <work_id> --parts synopsis` → `publish` | 既存ページの本文は変えずにあらすじだけを書き直す（検索・取得 0）。字数・章・文体の実測は `works/<id>/gen/synopsis_report.json`。`--parts pages` は既存ページだけ |
 | 既存作品を強化した調査で一から集め直す（A12） | `job rework <work_id> [--until <段>]` → `job resume <job_id> --until <段>` を繰り返す → `publish` | `research/`・`nkg/` を `works/<id>/_rework-backup-<時刻>/` へ移し（`gen/` は複写）、同定済みの新しいジョブ（予算は新規 40／60／30 分）を作る。段は search_plot → search_r1 → claims_r1 → followup → review_r1 → modules → phases → fact → gapfill → refact → interp → … 。研究の壁時計 30 分は gapfill の取得まで続けて走らせる（間を空けると gapfill が取得できない）。カバレッジの計測と追加調査の記録は `works/<id>/research/coverage.json`。戻すときは退避フォルダの `research/`・`nkg/`・`gen/` を戻して `publish` |
 | S2 の査読往復を指定して再開（A12） | `job resume <job_id> --until <段> --review-rounds 1` | 事実層・解釈層の査読を 1 往復にする（既定 2、最大 2）。1 段が 10 分の作業単位に収まらないときに使い、台帳に作品ごとの往復数を残す |
@@ -49,6 +49,23 @@
 |---|---|---|
 | 公開を止める（作品単位、まだ公開していない作品） | `hold <work_id> --reason "…"` | Restricted になり、次のビルド・公開から外れる。進行中のジョブは次の段の境目で `held`。**既に公開済みなら `takedown` を使う**（3） |
 | 止めた作品を戻す | `release <work_id> --reason "…"` → `publish` | Public に戻り、held のジョブは `queued` に戻って worker が続きから進める。公開に戻すのは次の `publish`（自動公開なら次のジョブ完了時にも戻る） |
+
+### 2.5 要件適合と公開保留（A15）
+
+ジョブと `regen` は、自動確認（A-1／A-2）の後に要件適合の段 `conform` を通る（REQUIREMENTS 5.5）。判定するのは数えられる「形」だけ（あらすじの字数・カバレッジ・選択モジュールの図・前の公開版からの後退・A-1／A-2）。内容（解釈・考察・文章の個性）には判定を掛けない。
+
+| したいこと | コマンド・場所 | 確認するところ |
+|---|---|---|
+| 項目ごとの扱いを変える | `harness/config/conformance.json` の `items.<項目>.mode`（`enforce`＝満たすまで公開しない／`warn`＝記録して公開／`off`）と `repair_max`（修復の上限、既定 2）、`regression.max_element_drop_ratio`（後退の許容、既定 0.05） | 項目は `synopsis_chars`・`coverage`・`figures`・`regression`・`rights`。`rights` は enforce から変えられない（変えるとエラー）。既定は synopsis_chars＝enforce、coverage＝warn、figures＝warn、regression＝enforce |
+| ジョブの適合の結果を見る | `works/<id>/check/conformance.json`、完了通知の「要件適合: …」の行、台帳の `- CONFORMANCE …` 行（不足があったときだけ） | `outcome`（pass／warn／held）、`initial`（修復前）と `items`（最後）の判定、`repairs`（修復した段・所要・結果）、`unrepairable`（修復できない不足と理由。例: 研究の壁時計 30 分の外、regen の範囲外、上限に達した） |
+| 公開保留になったジョブ | 通知「要件適合: 公開保留（enforce の不足 …）。前の公開版のまま。解除: sfsh release <work_id>」。ジョブは `built` で止まり、自動公開されない | `works/<id>/gen/public.held.json` が候補（保留中の版）、`gen/public.json` は前の公開版のまま（新規作品なら無い＝サイトに出ない）。`work.json` の `conformance_hold` に不足の一覧 |
+| 保留の版をそのまま公開する（手動の解除） | `release <work_id> --reason "…"` → `publish` | release の出力・台帳の `- OPS … release` 行に「conformance hold released」。`gen/public.held.json` が `gen/public.json` になり、次の `publish` で出る |
+| 保留の版を捨てて前の版のままにする | 何もしない（前の公開版が出たまま）。作り直すなら `regen <work_id>`（あらすじの不足）または `job rework`／`job resume --from <段>`（事実層・解釈層の不足） | 後の実行が適合すれば、古い保留は自動で外れる（`work.json` の履歴 `conformance_cleared`） |
+| 判定だけを見る（修復・保留なし） | `conformance <work_id>`、別の版を比べるなら `conformance <work_id> --candidate <public.json か projection.json> --out <file>` | 項目ごとの mode・判定・不足、要素数と前の公開版の要素数、「would be: pass／warn／held」 |
+| 前の公開版の写しを作る（A15 より前に公開した作品だけ） | ビルドして `site/dist/works/<id>/` と `publish/works/<id>/` が同じことを確かめてから `conformance baseline <work_id> --release <release_id>` | `works/<id>/releases/published.public.json`・`published.meta.json`。A15 以後は公開のたびに自動で保存される |
+
+- 修復は不足した部分だけを作り直す: あらすじ（章立ての計画から引き直し。ジョブでは 2 回目に事実層の出来事を増やす作り直し）、事実層（出来事の最低数を上げた refact → 解釈層 → 執筆）、解釈層（逆算図など）、カバレッジ（予算 40／60 と研究の壁時計 30 分の内側の gapfill）。予算と壁時計は変えない。
+- 公開保留は作品単位で効く（`gen/public.json` が前の版のまま）ので、別のジョブの公開や手動の `publish` が保留中の版を出すことはない。
 
 ### 2.4 ハーネス公開の更新（`kokuren333/SFSH`）
 

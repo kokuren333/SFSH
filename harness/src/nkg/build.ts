@@ -8,7 +8,7 @@
  *    zeroed element types / structural zeros → stage warnings (never stop the job, P-1)
  *  - assemble: code maps claim_refs → provenance, rejects basis-less elements, computes confidence, gaps, validation
  */
-import type { StageContext, StageResult } from "../job/context.ts";
+import type { RepairHints, StageContext, StageResult } from "../job/context.ts";
 import type { ModelPort } from "../model/types.ts";
 import type { Claim } from "../research/claimTypes.ts";
 import type { SourceCard } from "../research/types.ts";
@@ -184,8 +184,15 @@ const port = (ctx: StageContext, m: ModelName): ModelPort => (m === "luna" ? ctx
 const opposite = (m: ModelName): ModelName => (m === "luna" ? "haiku" : "luna");
 const toolsFor = (m: ModelName) => (m === "luna" ? ({ tools: "none" } as const) : {});
 
-function hintsFor(inp: S2Inputs, layer: "fact" | "interp"): string[] {
+function hintsFor(inp: S2Inputs, layer: "fact" | "interp", repair?: RepairHints): string[] {
   const h: string[] = [];
+  // AMENDMENT 15: conformance repair — counts / presence only (what is missing), never an angle or a reading (P-1)
+  if (layer === "fact" && repair?.fact) {
+    const f = repair.fact;
+    h.push(`（要件の修復 ${repair.attempt} 回目）Event は claim に根拠がある範囲で少なくとも ${f.minEvents} 件を目安に起こす（各フェーズ ${f.minEventsPerPhase} 件以上、最後のフェーズ ${f.minEventsLastPhase} 件以上、結末の出来事を含める）。根拠のない出来事は作らない。`);
+    for (const n of f.notes) h.push(n);
+  }
+  if (layer === "interp" && repair?.interp) for (const n of repair.interp.notes) h.push(`（要件の修復 ${repair.attempt} 回目）${n}`);
   if (layer === "fact") {
     h.push(inp.enabled.has("M04") ? "時系列の二重化を扱う: Event の story_order と disclosure_phase を両方埋める。" : "Event の disclosure_phase は null にする（story_order は埋める）。");
     if (inp.ms.expansion?.hints?.faction_emphasis === true) h.push("勢力（Faction）と勢力間・人物と勢力の関係を重視する。");
@@ -250,7 +257,7 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
         phases,
         claims: claimsFor(inp, specs),
         existing: summarize(existing),
-        hints: hintsFor(inp, cfg.layer),
+        hints: hintsFor(inp, cfg.layer, ctx.repair),
       }),
       schema: groupSchema(specs),
       ...toolsFor(author),
@@ -282,7 +289,7 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
           const again = await authorPort.call({
             task: `s2.${cfg.layer}.${g.name}`,
             prompt:
-              authoringPrompt({ layer: cfg.layer, title: inp.title, coverage: inp.coverageLabel, group: g.name, specs, phases, claims: claimsFor(inp, specs), existing: summarize(existing), hints: hintsFor(inp, cfg.layer) }) +
+              authoringPrompt({ layer: cfg.layer, title: inp.title, coverage: inp.coverageLabel, group: g.name, specs, phases, claims: claimsFor(inp, specs), existing: summarize(existing), hints: hintsFor(inp, cfg.layer, ctx.repair) }) +
               `\n# 前回の出力について\n- 前回は ${missingKinds.join("・")} が 0 件でした。claim から言えるものは省かずに作ってください（直接言えなければ epistemic: sfsh_analysis と based_on で）。他の型も含め、グループ全体を出し直してください。\n`,
             schema: groupSchema(specs),
             ...toolsFor(author),

@@ -11,6 +11,7 @@ import { discordCommand } from "./commands/discord.ts";
 import { publishCommand } from "./commands/publish.ts";
 import { HARNESS_PUBLISH_USAGE, harnessPublishCommand } from "./commands/harnessPublish.ts";
 import { REGEN_USAGE, regenCommand } from "./commands/regen.ts";
+import { CONFORMANCE_USAGE, conformanceCommand } from "./commands/conformance.ts";
 import type { PortName } from "./model/types.ts";
 
 /** Exit codes: 0 ok / 2 usage error (unknown command, missing args) / 3 command failed. */
@@ -68,7 +69,7 @@ const COMMANDS: Record<string, CommandSpec> = {
   },
   release: {
     usage: "release <work_id> [--reason <t>] [--json]",
-    summary: "Release a held work: Public again from the next build; held jobs continue via job resume (§5.4)",
+    summary: "Release a held work: Public again from the next build; held jobs continue via job resume (§5.4). Also releases a conformance hold (A15: gen/public.held.json → gen/public.json; then sfsh publish)",
     positional: 1,
     run: (a) => releaseCommand(a),
   },
@@ -107,6 +108,11 @@ const COMMANDS: Record<string, CommandSpec> = {
     summary: "Re-run S3 write → compose → S4 autocheck for an existing work from saved research only (no search / fetch; backup under gen/_backup-<stamp>/)",
     positional: 1,
     run: (a) => regenCommand(a),
+  },
+  conformance: {
+    usage: CONFORMANCE_USAGE,
+    summary: "Requirement conformance (A15): check a work / a candidate file against the shape requirements and the previous published version (no repair); baseline backfill",
+    run: (a) => conformanceCommand(a),
   },
   design: {
     usage: "design check [--json-out <file>] | design generate [--sample-dir <dist>] [--dry-run]",
