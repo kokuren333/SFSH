@@ -112,7 +112,7 @@ export function synopsisMaterial(pw: PublicWork, claims: Claim[]): { json: strin
     emotion_beats: pw.elements.emotion_beats.map((b) => ({ id: b.id, phase: b.phase, label: b.label, summary: b.summary, evoked_by: b.evoked_by })),
     secrets: (pw.viz.matrix?.secrets ?? []).map((s) => ({ id: s.id, label: s.label })),
     outcomes,
-    claims: claims.map((c) => ({ id: c.claim_id, phase_hint: c.phase_hint, spoiler: c.spoiler, text: c.text })),
+    claims: claims.map((c) => ({ id: c.claim_id, phase_hint: c.phase_hint, ...(c.story_unit ? { unit: c.story_unit } : {}), spoiler: c.spoiler, text: c.text })),
   });
   return { json, factIds };
 }

@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { runJob, newJobState, STAGES } from "../src/job/runner.ts";
+import { OPEN_FRAMES } from "../src/research/frames.ts";
 import { validateNkg } from "../src/nkg/validate.ts";
 import type { Claim } from "../src/research/claimTypes.ts";
 import { createFetcher, normalizeUrl, sourceIdFor } from "../src/research/fetch/index.ts";
@@ -40,7 +41,9 @@ test("M1 gate (job e2e): denylist / robots / budget / self-reported URLs are nev
   const fetcher: Fetcher = { fetchAll: (candidates, ctx) => real.fetchAll(candidates, { ...ctx, allowPrivateAddresses: true }) };
 
   const models = makeFakeModels(srv.base);
-  // searches: S0 1 + r1 2 + one r1 supplement call (budget 12 − used 3 − follow-up reserve 8 = 1) + r2 1
+  // searches: S0 1 + plot 0 + r1 2 + one r1 supplement call (budget 12 − used 3 − follow-up reserve 8 = 1) + gapfill 1.
+  // AMENDMENT 12: the frame plan is opened (no caps / reserves) so this tiny budget exercises the fetch rules; the
+  // post-NKG gapfill round (Haiku's missing M07) finds what the old follow-up r2 found.
   const limits = { searches: 12, fetches: 9, wallMs: 10 * 60_000 };
   const instructionUrl = u(PAGES.guide.path);
   const st = newJobState(
@@ -51,7 +54,7 @@ test("M1 gate (job e2e): denylist / robots / budget / self-reported URLs are nev
 
   const t0 = Date.now();
   // S0–S2 only (the M1 gate path); S3 stages are covered by the gen tests.
-  const done = await runJob(st, { luna: models.luna, haiku: models.haiku, fetcher, worksDir, jobsDir, until: "check" });
+  const done = await runJob(st, { luna: models.luna, haiku: models.haiku, fetcher, worksDir, jobsDir, until: "check", frames: OPEN_FRAMES });
   const elapsed = Date.now() - t0;
 
   // ---------------- job state
@@ -98,7 +101,7 @@ test("M1 gate (job e2e): denylist / robots / budget / self-reported URLs are nev
     assert.ok(gaps.some((g) => g.url === d.url && kinds.includes(g.kind)), `gap for skipped ${d.url} (${d.decision})`);
   }
   assert.ok(gaps.some((g) => g.kind === "self_reported_url" && g.url === u(models.selfReportedPath)), "self_reported_url gap");
-  assert.ok(gaps.some((g) => g.kind === "no_sources_for_aspect" && g.aspect === "M07"), "M07 still short after follow-up");
+  assert.ok(gaps.some((g) => g.kind === "coverage_shortfall" && g.aspect === "aspect:M07"), "M07 still short after the coverage rounds");
   const candidates = readJ<{ rejected: { url: string; reason: string }[] }>("research/candidates.json");
   assert.ok(candidates.rejected.some((r) => r.url === u(models.selfReportedPath) && r.reason === "self_reported"));
 
@@ -170,10 +173,12 @@ test("M1 gate (job e2e): denylist / robots / budget / self-reported URLs are nev
 
   // ---------------- models were fake, routed by task
   assert.ok(models.calls.every((c) => c.port === "haiku" || c.req.tools === "web_search" || c.req.tools === "none"));
-  assert.deepEqual(
-    models.calls.filter((c) => c.req.tools === "web_search").map((c) => c.req.task),
-    ["s0.identify.search", "s1.search.r1", "s1.search.r1.supplement", "s1.search.r2"],
-  );
+  const webTasks = [...new Set(models.calls.filter((c) => c.req.tools === "web_search").map((c) => c.req.task))];
+  // followup rounds do not start here: the 10-minute test wall clock is below the reserve kept for the post-NKG round
+  assert.deepEqual(webTasks, ["s0.identify.search", "s1.search.plot", "s1.search.r1", "s1.search.r1.supplement", "s1.gapfill.r1"]);
+  assert.match(String(done.stages.followup.metrics.stopped), /^wall_clock/);
+  assert.equal(done.stages.gapfill.metrics.new_active_after_review, 2);
+  assert.equal(done.stages.refact.metrics.rebuilt, 1);
   // CP-029 finding a: the r1 supplement ran once (budget-limited), for the first uncovered aspect (M02; bibliographic is
   // covered by the S0 candidates), recorded as such; its pick (already fetched in r1) was not requested again but now
   // maps M02 to a source; the remaining aspects are a budget gap, not a failure

@@ -119,7 +119,7 @@ const COMMANDS: Record<string, CommandSpec> = {
     run: runModels,
   },
   job: {
-    usage: 'job run --work "<title>" [--medium m] [--range r] [--url u]... | job resume <job_id> | job status <job_id> [--json]',
+    usage: 'job run --work "<title>" [--medium m] [--range r] [--url u]... | job resume <job_id> [--from <stage>] [--until <stage>] [--review-rounds 1|2] | job status <job_id> [--json] | job rework <work_id> [--until <stage>] [--create-only]',
     summary: "Run / resume / inspect one S0–S2 job (M1 entry; the queue is M4)",
     run: jobCommand,
   },

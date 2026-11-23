@@ -40,3 +40,6 @@ Thumbs.db
 
 # AMENDMENT 09 regen backups (sfsh regen; local rollback copies of generated text)
 works/*/gen/_backup-*/
+
+# AMENDMENT 12 rework backups (sfsh job rework; local rollback copies of research/nkg/gen, includes raw pages)
+works/*/_rework-backup-*/

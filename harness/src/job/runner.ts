@@ -7,7 +7,9 @@ import { selectModules } from "../nkg/modules.ts";
 import { validateNkgFile } from "../nkg/validate.ts";
 import { reviewClaims } from "../research/claimReview.ts";
 import { extractClaims } from "../research/claims.ts";
-import { followUp } from "../research/followup.ts";
+import { allowance, FRAMES, type FramePlan } from "../research/frames.ts";
+import { runPlotSearch } from "../research/plotSearch.ts";
+import { coverageFollowUp, gapFill, refact } from "../research/targeted.ts";
 import { identify } from "../research/identify/index.ts";
 import { readClaims, readGaps, readSources, readFetchLog, writeBudget } from "../research/researchIo.ts";
 import { assertCardsTraceable, runSearch } from "../research/search.ts";
@@ -26,13 +28,20 @@ import type { StageContext, StageResult } from "./context.ts";
 
 export const STAGES = [
   "identify",
+  // AMENDMENT 12: plot frame first (event-granular synopsis sources), then the analysis frame
+  "search_plot",
   "search_r1",
   "claims_r1",
-  "review_r1",
+  // AMENDMENT 12: coverage-driven follow-up (claim coverage → targeted rounds) before the review, so review_r1
+  // checks the follow-up claims together with the rest
   "followup",
+  "review_r1",
   "modules",
   "phases",
   "fact",
+  // AMENDMENT 12: shortfall detection on the NKG fact layer → targeted research → rebuild modules/phases/fact
+  "gapfill",
+  "refact",
   "interp",
   "assemble",
   "check",
@@ -111,6 +120,10 @@ export interface RunnerDeps {
    * the whole running job. Must not throw (errors are the caller's to log); it must not touch this job's state file.
    */
   atBoundary?: () => Promise<void>;
+  /** AMENDMENT 12: research frame plan (default FRAMES). */
+  frames?: FramePlan;
+  /** AMENDMENT 12: S2 fact / interp review rounds for this run (1..2). Absent = REVIEW_MAX_ROUNDS (2). */
+  reviewRounds?: number;
 }
 
 // ---------- state files ----------
@@ -257,23 +270,37 @@ const ROUND1_ASPECTS = ["bibliographic", "M01", "M03", "M02", "M06", "M07", "M10
 
 function defaultStage(name: Exclude<StageName, "identify">, st: JobState): (ctx: StageContext) => Promise<StageResult> {
   switch (name) {
+    case "search_plot":
+      return (ctx) => runPlotSearch(ctx, { work: workBrief(ctx.workDir) });
     case "search_r1":
       return (ctx) =>
-        runSearch(ctx, { round: 1, aspects: ROUND1_ASPECTS, work: workBrief(ctx.workDir), maxSearches: 14, instructionUrls: st.request.instruction_urls });
+        runSearch(ctx, {
+          round: 1,
+          aspects: ROUND1_ASPECTS,
+          work: workBrief(ctx.workDir),
+          maxSearches: 14,
+          instructionUrls: st.request.instruction_urls,
+          // AMENDMENT 12: the analysis frame's allowance leaves the reserve for the coverage rounds
+          allowance: allowance(ctx.budget, (ctx.frames ?? FRAMES).analysis.cap, (ctx.frames ?? FRAMES).analysis.reserve),
+        });
     case "claims_r1":
       return (ctx) => extractClaims(ctx, { workTitle: workBrief(ctx.workDir).title });
     case "review_r1":
       return (ctx) => reviewClaims(ctx, { maxRounds: 2, workTitle: workBrief(ctx.workDir).title });
     case "followup":
-      return (ctx) => followUp(ctx, { work: workBrief(ctx.workDir), maxSearches: 8 });
+      return (ctx) => coverageFollowUp(ctx, { work: workBrief(ctx.workDir) });
+    case "gapfill":
+      return (ctx) => gapFill(ctx, { work: workBrief(ctx.workDir) });
+    case "refact":
+      return refact;
     case "modules":
       return selectModules;
     case "phases":
       return buildPhases;
     case "fact":
-      return (ctx) => buildFactLayer(ctx);
+      return (ctx) => (ctx.reviewRounds ? buildFactLayer(ctx, ctx.reviewRounds) : buildFactLayer(ctx));
     case "interp":
-      return (ctx) => buildInterpLayer(ctx);
+      return (ctx) => (ctx.reviewRounds ? buildInterpLayer(ctx, ctx.reviewRounds) : buildInterpLayer(ctx));
     case "assemble":
       return assembleNkg;
     case "check":
@@ -415,7 +442,7 @@ export async function runJob(st: JobState, deps: RunnerDeps): Promise<JobState> 
       log(`held before stage ${name}: work ${st.work_id} is Restricted (${heldBy})`);
       return st;
     }
-    st.state = name === "identify" ? "identifying" : ["search_r1", "claims_r1", "review_r1", "followup"].includes(name) ? "researching" : ["tags", "project", "write", "compose"].includes(name) ? "generating" : name === "autocheck" ? "checking" : "structuring";
+    st.state = name === "identify" ? "identifying" : ["search_plot", "search_r1", "claims_r1", "review_r1", "followup"].includes(name) ? "researching" : ["tags", "project", "write", "compose"].includes(name) ? "generating" : name === "autocheck" ? "checking" : "structuring";
 
     let ok = false;
     while (rec.attempts < MAX_ATTEMPTS) {
@@ -505,6 +532,8 @@ async function runStage(name: Exclude<StageName, "identify">, st: JobState, deps
     budget: st.budget,
     now,
     log,
+    frames: deps.frames,
+    reviewRounds: deps.reviewRounds,
   };
   const fn = deps.stageOverrides?.[name] ?? defaultStage(name, st);
   const r = await fn(ctx);

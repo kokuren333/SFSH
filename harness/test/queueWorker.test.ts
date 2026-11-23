@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { answerCommand, cancelCommand, enqueueCommand, statusCommand } from "../src/commands/queue.ts";
-import { readState } from "../src/job/runner.ts";
+import { readState, STAGES } from "../src/job/runner.ts";
 import type { ModelPort, ModelRequest, ModelResult, WebSearchEvent } from "../src/model/types.ts";
 import { listNotices } from "../src/queue/notify.ts";
 import { answerJob, cancelJob } from "../src/queue/ops.ts";
@@ -105,7 +105,7 @@ test("worker: received → identifying → queued → researching → structurin
   const st = jobStatus(env, j.job_id);
   assert.equal(st.ok, true);
   assert.match(st.text, /state=built/);
-  assert.equal((st.data.stages as unknown[]).length, 16);
+  assert.equal((st.data.stages as unknown[]).length, STAGES.length); // 19 since AMENDMENT 12 (search_plot, gapfill, refact)
   assert.equal((queueSummary(env).data.counts as Record<string, number>).built, 1);
   // worker lock released
   assert.ok(!fs.existsSync(path.join(env.queueDir, "worker.lock")));

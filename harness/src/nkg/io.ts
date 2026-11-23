@@ -59,11 +59,14 @@ export function toNkgSource(c: SourceCard): NkgSource {
 
 /** Claims restricted to those whose sources have cards, keyed by id. */
 export function claimIndex(claims: Claim[], cards: SourceCard[]): Map<string, Claim> {
-  const have = new Set(cards.map((c) => c.source_id));
+  const tierOf = new Map(cards.map((c) => [c.source_id, c.tier] as const));
   const out = new Map<string, Claim>();
   for (const c of claims) {
-    const sids = (c.source_ids ?? []).filter((s) => have.has(s));
-    if (sids.length) out.set(c.claim_id, { ...c, source_ids: sids });
+    const sids = (c.source_ids ?? []).filter((s) => tierOf.has(s));
+    // AMENDMENT 12: the best source tier is shown to the S2 authors (prompt only, never persisted) so that elements
+    // cite corroborating claims from higher-tier sources (confidence §2.3 is computed from the cited claims' sources)
+    const best_tier = sids.map((s) => tierOf.get(s)!).sort()[0];
+    if (sids.length) out.set(c.claim_id, { ...c, source_ids: sids, best_tier } as Claim);
   }
   return out;
 }

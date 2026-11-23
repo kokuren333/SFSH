@@ -7,6 +7,7 @@ import { appendClaimsReview, RESEARCH_FILES, readClaims, readRawText, readSource
 import { hasVerbatimRun, normalizeForMatch, type NormalizedText } from "./textMatch.ts";
 import { REVIEW_MAX_ROUNDS } from "../nkg/review.ts";
 import { summarizeReviews } from "../nkg/reviewSummary.ts";
+import { pool } from "../util/pool.ts";
 
 /**
  * S1 claim review (WP-1.3 / WP-2.1, REQUIREMENTS §3.2–3.3): Haiku points out problems (findings only), Luna
@@ -25,6 +26,8 @@ import { summarizeReviews } from "../nkg/reviewSummary.ts";
 export const REVIEW_BATCH = 120;
 export const CONTEXT_PAD = 150;
 export const REVIEW_TIMEOUT_MS = 600_000;
+/** AMENDMENT 12: batches of one round run in parallel (the model calls overlap; applying answers stays sequential). */
+export const REVIEW_CONCURRENCY = 3;
 
 export interface ReviewClaimsOptions {
   maxRounds?: number;
@@ -131,8 +134,10 @@ export async function reviewClaims(ctx: StageContext, opts: ReviewClaimsOptions 
     rounds = round;
     const last = round === maxRounds;
     const next: Claim[] = [];
-    for (let b = 0; b * REVIEW_BATCH < targets.length; b++) {
-      const batch = targets.slice(b * REVIEW_BATCH, (b + 1) * REVIEW_BATCH);
+    const batchIdx = Array.from({ length: Math.ceil(targets.length / REVIEW_BATCH) }, (_, i) => i);
+    const roundTargets = targets;
+    await pool(batchIdx, REVIEW_CONCURRENCY, async (b) => {
+      const batch = roundTargets.slice(b * REVIEW_BATCH, (b + 1) * REVIEW_BATCH);
       const batchIds = new Set(batch.map((c) => c.claim_id));
       const ctxById = new Map(batch.map((c) => [c.claim_id, contextFor(c)]));
       const covered: Record<string, number> = {};
@@ -270,7 +275,7 @@ export async function reviewClaims(ctx: StageContext, opts: ReviewClaimsOptions 
       writeClaims(ctx.workDir, claims);
       const entry: ClaimReviewEntryV2 = { round, batch: b + 1, at: isoLocal(ctx.now()), claim_ids: batch.map((c) => c.claim_id), findings, actions, outcomes, missing, advisory, deleted };
       appendClaimsReview(ctx.workDir, [entry]);
-    }
+    });
     targets = next;
   }
 

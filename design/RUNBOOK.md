@@ -30,6 +30,8 @@
 | 取り消す | `cancel <job_id>`（バッチは `cancel --batch <batch_id>`） | `queued` 以前は即時、実行中は次の段の境目で `cancelled` |
 | 既存作品の文章だけ作り直す（再調査なし） | `regen <work_id>` → `publish` | 執筆・組版・自動確認だけを保存済みの調査から再実行する（検索・取得 0）。前の状態は `works/<id>/gen/_backup-<時刻>/`。worker と同時に動かさない |
 | あらすじ（全編・ネタバレ）だけ作り直す（A11） | `regen <work_id> --parts synopsis` → `publish` | 既存ページの本文は変えずにあらすじだけを書き直す（検索・取得 0）。字数・章・文体の実測は `works/<id>/gen/synopsis_report.json`。`--parts pages` は既存ページだけ |
+| 既存作品を強化した調査で一から集め直す（A12） | `job rework <work_id> [--until <段>]` → `job resume <job_id> --until <段>` を繰り返す → `publish` | `research/`・`nkg/` を `works/<id>/_rework-backup-<時刻>/` へ移し（`gen/` は複写）、同定済みの新しいジョブ（予算は新規 40／60／30 分）を作る。段は search_plot → search_r1 → claims_r1 → followup → review_r1 → modules → phases → fact → gapfill → refact → interp → … 。研究の壁時計 30 分は gapfill の取得まで続けて走らせる（間を空けると gapfill が取得できない）。カバレッジの計測と追加調査の記録は `works/<id>/research/coverage.json`。戻すときは退避フォルダの `research/`・`nkg/`・`gen/` を戻して `publish` |
+| S2 の査読往復を指定して再開（A12） | `job resume <job_id> --until <段> --review-rounds 1` | 事実層・解釈層の査読を 1 往復にする（既定 2、最大 2）。1 段が 10 分の作業単位に収まらないときに使い、台帳に作品ごとの往復数を残す |
 
 ### 2.2 確認
 

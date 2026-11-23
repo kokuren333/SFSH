@@ -61,6 +61,9 @@ import type { Gap, ModelName, ModuleId, Nkg, NkgWork, Phase, ReviewState } from 
 import { writeValidation } from "./validate.ts";
 
 export const AUTHORING_TIMEOUT_MS = 600_000;
+/** AMENDMENT 12: authoring waves (groups of one wave run in parallel and see the drafts of the earlier waves). */
+export const FACT_WAVES: string[][] = [["events"], ["people", "world"]];
+export const INTERP_WAVES: string[][] = [["reverse_plot", "motives_arcs", "themes_emotion"], ["extras"]];
 
 export interface PhasesFile {
   generated_at: string;
@@ -191,8 +194,12 @@ function hintsFor(inp: S2Inputs, layer: "fact" | "interp"): string[] {
 
 function claimsFor(inp: S2Inputs, specs: ElementSpec[]): Claim[] {
   const mods = new Set(specs.map((s) => s.module));
-  const rel = (c: Claim) => (c.aspects ?? []).some((a) => mods.has(a as ModuleId));
-  return [...inp.claims.filter(rel), ...inp.claims.filter((c) => !rel(c))];
+  // AMENDMENT 12: event-granular plot claims back the Event group (M03)
+  const rel = (c: Claim) => (c.aspects ?? []).some((a) => mods.has(a as ModuleId) || (a === "plot" && mods.has("M03")));
+  // AMENDMENT 12: higher-tier sources first within each group (stable), so they are seen (and cited) first
+  const tierRank = (c: Claim) => Number(String((c as Claim & { best_tier?: string }).best_tier ?? "T9").slice(1)) || 9;
+  const byTier = (xs: Claim[]) => xs.map((c, i) => ({ c, i })).sort((a, b) => tierRank(a.c) - tierRank(b.c) || a.i - b.i).map((x) => x.c);
+  return [...byTier(inp.claims.filter(rel)), ...byTier(inp.claims.filter((c) => !rel(c)))];
 }
 
 const summarize = (d: Draft[]) => d.filter((x) => !SPECS[x._type].edge).map((x) => ({ id: x.id, type: x._type, label: String(x.label ?? "") }));
@@ -229,14 +236,8 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
   let drafts: Draft[] = [];
   const renames: LayerFile["id_renames"] = [];
   let calls = 0;
-  for (const g of cfg.groups) {
-    const specs = enabledSpecs(g, inp.enabled);
-    if (!specs.length) {
-      groups.push({ name: g.name, kinds: [], called: false, elements: 0 });
-      continue;
-    }
-    allSpecs.push(...specs);
-    const res = await authorPort.call({
+  const author1 = (g: CallGroup, specs: ElementSpec[], existing: Draft[]) =>
+    authorPort.call({
       task: `s2.${cfg.layer}.${g.name}`,
       prompt: authoringPrompt({
         layer: cfg.layer,
@@ -246,7 +247,7 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
         specs,
         phases,
         claims: claimsFor(inp, specs),
-        existing: summarize([...prior, ...drafts]),
+        existing: summarize(existing),
         hints: hintsFor(inp, cfg.layer),
       }),
       schema: groupSchema(specs),
@@ -254,12 +255,74 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
       jobId: ctx.jobId,
       timeoutMs: AUTHORING_TIMEOUT_MS,
     });
-    calls++;
-    const got = draftsFromOutput(res.output, specs);
-    renames.push(...normalizeIds(got, taken));
-    drafts.push(...got);
-    groups.push({ name: g.name, kinds: specs.map((s) => s.kind), called: true, elements: got.length });
+  // AMENDMENT 12 (speed): groups are authored in waves; the groups of one wave run in parallel and see the drafts of the
+  // earlier waves. Fact: events → (people ‖ world); interp: (reverse plot ‖ motives & arcs ‖ themes & emotion) → extras.
+  const waves = (cfg.layer === "interp" ? INTERP_WAVES : FACT_WAVES).map((w) => cfg.groups.filter((g) => w.includes(g.name)));
+  const inWave = new Set(waves.flat().map((g) => g.name));
+  for (const g of cfg.groups) if (!inWave.has(g.name)) waves.push([g]); // any group not in a wave runs alone, in order
+  const results = new Map<string, Draft[]>();
+  for (const wave of waves) {
+    const existing = [...prior, ...drafts];
+    const settled = await Promise.allSettled(
+      wave.map(async (g) => {
+        const specs = enabledSpecs(g, inp.enabled);
+        if (!specs.length) return null;
+        const res = await author1(g, specs, existing);
+        calls++;
+        let got = draftsFromOutput(res.output, specs);
+        // AMENDMENT 12: a group whose output lacks an element type that the claims clearly support (≥3 claims of that
+        // module and nothing made, or ≥2 nodes but no edge between them) is asked once more with that note; the richer
+        // of the two outputs is kept. Deterministic trigger, no stop (P-1).
+        const missingKinds = expectedButMissing(specs, got, inp);
+        if (missingKinds.length) {
+          warnings.push(`${cfg.layer}: group ${g.name} returned no ${missingKinds.join("/")} — asked once more`);
+          const again = await authorPort.call({
+            task: `s2.${cfg.layer}.${g.name}`,
+            prompt:
+              authoringPrompt({ layer: cfg.layer, title: inp.title, coverage: inp.coverageLabel, group: g.name, specs, phases, claims: claimsFor(inp, specs), existing: summarize(existing), hints: hintsFor(inp, cfg.layer) }) +
+              `\n# 前回の出力について\n- 前回は ${missingKinds.join("・")} が 0 件でした。claim から言えるものは省かずに作ってください（直接言えなければ epistemic: sfsh_analysis と based_on で）。他の型も含め、グループ全体を出し直してください。\n`,
+            schema: groupSchema(specs),
+            ...toolsFor(author),
+            jobId: ctx.jobId,
+            timeoutMs: AUTHORING_TIMEOUT_MS,
+          });
+          calls++;
+          const got2 = draftsFromOutput(again.output, specs);
+          if (expectedButMissing(specs, got2, inp).length < missingKinds.length || (expectedButMissing(specs, got2, inp).length === missingKinds.length && got2.length > got.length)) got = got2;
+        }
+        return got;
+      }),
+    );
+    for (let i = 0; i < wave.length; i++) {
+      const s = settled[i]!;
+      if (s.status === "rejected") throw s.reason; // a failing call fails the stage as before (retry, 4.4)
+      if (s.value) results.set(wave[i]!.name, s.value);
+    }
+    // ids are normalized in the fixed group order so the result does not depend on which call finished first
+    for (const g of wave) {
+      const got = results.get(g.name);
+      if (!got) continue;
+      renames.push(...normalizeIds(got, taken));
+      drafts.push(...got);
+    }
   }
+  for (const g of cfg.groups) {
+    const specs = enabledSpecs(g, inp.enabled);
+    if (!specs.length) {
+      groups.push({ name: g.name, kinds: [], called: false, elements: 0 });
+      continue;
+    }
+    allSpecs.push(...specs);
+    groups.push({ name: g.name, kinds: specs.map((s) => s.kind), called: true, elements: results.get(g.name)?.length ?? 0 });
+  }
+  // AMENDMENT 12 (speed): the interpretive review / revision see the claims cited by the elements first (cap 300);
+  // the fact review keeps every claim (it checks for missing structure)
+  const reviewClaimsFor = (state: Draft[]): Claim[] => {
+    if (cfg.layer !== "interp") return inp.claims;
+    const cited = new Set(state.flatMap((d) => (Array.isArray(d.claim_refs) ? (d.claim_refs as string[]) : [])));
+    const first = inp.claims.filter((c) => cited.has(c.claim_id));
+    return [...first, ...inp.claims.filter((c) => !cited.has(c.claim_id))].slice(0, Math.max(300, first.length));
+  };
 
   // review loop (reviewer = opposite model, findings only; author answers every finding). §3.3, ≤ maxRounds rounds.
   const firstDraftCounts = countByType(drafts);
@@ -273,7 +336,7 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
       const r = await reviewerPort.call({
         task: `s2.${cfg.layer}.review`,
         prompt:
-          layerReviewPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(state, allSpecs), claims: inp.claims, context: summarize(prior) }) +
+          layerReviewPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(state, allSpecs), claims: reviewClaimsFor(state), context: summarize(prior) }) +
           priorRoundsBlock(rounds, round, maxRounds),
         schema: FINDINGS_SCHEMA,
         ...toolsFor(reviewer),
@@ -286,7 +349,7 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
     revise: async (state, findings: Finding[], round) => {
       const r = await authorPort.call({
         task: `s2.${cfg.layer}.revise`,
-        prompt: revisionPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(state, allSpecs), findings, claims: inp.claims }) + lastRoundNote(round, maxRounds),
+        prompt: revisionPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(state, allSpecs), findings, claims: reviewClaimsFor(state) }) + lastRoundNote(round, maxRounds),
         schema: revisionSchema(allSpecs),
         ...toolsFor(author),
         jobId: ctx.jobId,
@@ -639,3 +702,23 @@ export async function assembleNkg(ctx: StageContext): Promise<StageResult> {
 }
 
 const countLayer = (r: Rejection[], layer: string) => r.filter((x) => x.layer === layer).length;
+
+/**
+ * AMENDMENT 12: element types a group should have produced but did not (deterministic): a node type whose module has
+ * ≥3 active claims (Event / Character / Secret / WorldRule / Setup / Context …) with zero elements, and the edge that
+ * connects ≥2 such nodes (Causes between Events, Relation between Characters, Knows for Secrets) with zero elements.
+ */
+export function expectedButMissing(specs: ElementSpec[], got: Draft[], inp: { claims: Claim[] }): string[] {
+  const count = (k: string) => got.filter((d) => d._type === k).length;
+  const claimsOf = (m: string) => inp.claims.filter((c) => (c.aspects ?? []).includes(m) || (m === "M03" && (c.aspects ?? []).includes("plot"))).length;
+  const kinds = new Set(specs.map((s) => s.kind as string));
+  const out: string[] = [];
+  for (const s of specs) {
+    if (s.edge || s.module === "extra") continue;
+    if (s.kind === "Faction") continue; // optional by nature
+    if (count(s.kind) === 0 && claimsOf(s.module) >= 3) out.push(s.kind);
+  }
+  const pairs: [string, string, number][] = [["Causes", "Event", 2], ["Relation", "Character", 2], ["Knows", "Secret", 1]];
+  for (const [edge, node, min] of pairs) if (kinds.has(edge) && count(node) >= min && count(edge) === 0) out.push(edge);
+  return out;
+}

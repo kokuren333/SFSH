@@ -29,7 +29,7 @@ const en = (...v: string[]) => ({ type: "string", enum: v });
 
 export const SPECS: Record<NodeType | EdgeType, ElementSpec> = {
   // ---- fact layer ----
-  Event: { kind: "Event", edge: false, key: "events", module: "M03", idPrefix: "ev", fields: { story_order: { type: ["integer", "null"] }, disclosure_phase: ns }, guide: "物語の因果に効く転換点だけ（範囲1単位あたり8件程度）。場面の連続にしない。story_order=作中の実際の時系列順（1始まり）、disclosure_phase=読者に明かされるフェーズID（時系列の二重化を扱わないときは null）" },
+  Event: { kind: "Event", edge: false, key: "events", module: "M03", idPrefix: "ev", fields: { story_order: { type: ["integer", "null"] }, disclosure_phase: ns }, guide: "物語の主要な出来事。転換点を中心に、序盤から結末まで時系列で欠けなく（範囲1単位あたり12〜20件程度、各フェーズに3件以上。粗筋の claim〔aspects に plot〕が多ければそれを主な根拠にする）。場面の連続にしない。story_order=作中の実際の時系列順（1始まり）、disclosure_phase=読者に明かされるフェーズID（時系列の二重化を扱わないときは null）" },
   Causes: { kind: "Causes", edge: true, key: "causes", module: "M03", idPrefix: "cs", fields: { kind: en("causes", "enables", "motivates", "prevents") }, guide: "Event→Event の因果。from=原因、to=結果。主要な Event がばらばらに孤立しないよう、つながる因果をすべて作る（直接言えなければ sfsh_analysis）" },
   Character: { kind: "Character", edge: false, key: "characters", module: "M01", idPrefix: "ch", fields: {}, guide: "人物（30人程度まで）。label は人物の名前だけ（作中の呼び名。説明句にしない。例: ×「願いを保留する主人公」→ ○ 名前）。役割・説明は summary に書く" },
   Faction: { kind: "Faction", edge: false, key: "factions", module: "M01", idPrefix: "fa", fields: {}, guide: "組織・勢力・集団" },

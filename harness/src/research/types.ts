@@ -112,7 +112,7 @@ export interface BudgetState {
 
 /** Information gap recorded at research level (research/gaps.json). Never stops the job (§1.3-5, P-1). */
 export interface ResearchGap {
-  kind: "fetch_skipped" | "budget_exhausted" | "unverified_open_page" | "self_reported_url" | "no_sources_for_aspect";
+  kind: "fetch_skipped" | "budget_exhausted" | "unverified_open_page" | "self_reported_url" | "no_sources_for_aspect" | "coverage_shortfall";
   url?: string;
   aspect?: string;
   detail: string;

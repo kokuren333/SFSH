@@ -1,5 +1,6 @@
 import type { ModelPort } from "../model/types.ts";
 import type { BudgetState, Fetcher } from "../research/types.ts";
+import type { FramePlan } from "../research/frames.ts";
 
 /**
  * Context handed to every S0–S2 stage function (CP-016). The job runner (harness/src/job/) builds it;
@@ -25,6 +26,10 @@ export interface StageContext {
    * spoiler synopsis. Absent = both (full jobs). `sfsh regen --parts synopsis` writes the synopsis only.
    */
   writeParts?: readonly WritePartName[];
+  /** AMENDMENT 12 research frame plan (caps / reserves inside the job budget). Absent = FRAMES. */
+  frames?: FramePlan;
+  /** AMENDMENT 12: review rounds of the S2 fact / interp layers for this run (1..2, §3.3). Absent = REVIEW_MAX_ROUNDS. */
+  reviewRounds?: number;
 }
 
 export const WRITE_PART_NAMES = ["pages", "synopsis"] as const;

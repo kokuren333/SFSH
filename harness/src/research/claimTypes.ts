@@ -8,11 +8,13 @@ export type ClaimAspect =
   | "bibliographic"
   | "title"
   | "genre"
+  /** AMENDMENT 12: event-granular synopsis fact (who did what, what happened next), the "plot frame". */
+  | "plot"
   | "M01" | "M02" | "M03" | "M04" | "M05" | "M06"
   | "M07" | "M08" | "M09" | "M10" | "M11" | "M12";
 
 export const CLAIM_ASPECTS: readonly ClaimAspect[] = [
-  "bibliographic", "title", "genre",
+  "bibliographic", "title", "genre", "plot",
   "M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12",
 ];
 
@@ -38,6 +40,13 @@ export interface Claim {
   phase_hint: PhaseHint;
   spoiler: Spoiler;
   entities: string[];
+  /**
+   * AMENDMENT 12: episode / chapter number the fact belongs to when the source states it (null = unknown).
+   * Absent on claims extracted before A12.
+   */
+  story_unit?: number | null;
+  /** AMENDMENT 12: names of the characters involved (people only). Absent on claims extracted before A12. */
+  characters?: string[];
   authored_by: "luna";
   reviewed_by: "haiku" | null;
   review: ClaimReviewState;

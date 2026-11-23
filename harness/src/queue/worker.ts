@@ -86,7 +86,8 @@ const RUNNING_STATES: readonly JobStateName[] = ["researching", "structuring", "
 /** Runner stage → queue state (same grouping as job/runner.ts). */
 export function stateOfStage(name: StageName): JobStateName {
   if (name === "identify") return "identifying";
-  if (["search_r1", "claims_r1", "review_r1", "followup"].includes(name)) return "researching";
+  // AMENDMENT 12: gapfill / refact run inside the NKG build (after fact) and stay "structuring" (monotonic queue states)
+  if (["search_plot", "search_r1", "claims_r1", "review_r1", "followup"].includes(name)) return "researching";
   if (["tags", "project", "write", "compose"].includes(name)) return "generating";
   if (name === "autocheck") return "checking";
   return "structuring";

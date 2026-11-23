@@ -94,6 +94,26 @@ export function makeFakeModels(base: string): FakeModels {
           };
         return { events: [searchEvent(`ws-r1s-${aspect}`, `${TITLE} ${aspect}`, [])], output: { selections: [], notes: "見つからない" } };
       }
+      case "s1.search.plot":
+        // AMENDMENT 12 plot frame: nothing found in this fixture
+        return { events: [], output: { selections: [], notes: "見つからない" } };
+      case "s1.followup.r1":
+      case "s1.followup.r2":
+      case "s1.followup.r3":
+        // AMENDMENT 12 claim-coverage rounds: the fixture has no synopsis pages
+        return { events: [], output: { selections: [], notes: "見つからない" } };
+      case "s1.gapfill.r1":
+      case "s1.gapfill.r2": {
+        // AMENDMENT 12 post-NKG round: Haiku's "missing" M07 target finds the essay / fan pages (the old r2 result)
+        if (!req.prompt.includes("不足している点（この1つだけ）\n- M07")) return { events: [], output: { selections: [], notes: "見つからない" } };
+        return {
+          events: [searchEvent("ws-r2-1", `${TITLE} 成長 結末`, [PAGES.essay.path, PAGES.fan1.path, PAGES.fan2.path])],
+          output: {
+            selections: [sel(PAGES.essay.path, "T4", ["M07"]), sel(PAGES.fan1.path, "T4", ["M07"]), sel(PAGES.fan2.path, "T4", ["M07"])],
+            notes: null,
+          },
+        };
+      }
       case "s1.search.r2":
         return {
           events: [searchEvent("ws-r2-1", `${TITLE} 成長 結末`, [PAGES.essay.path, PAGES.fan1.path, PAGES.fan2.path])],
@@ -123,6 +143,8 @@ export function makeFakeModels(base: string): FakeModels {
           phase_hint: c.phase ?? "unknown",
           spoiler: c.spoiler ?? "none",
           entities: c.entities ?? [],
+          story_unit: null,
+          characters: [],
         });
       }
     }

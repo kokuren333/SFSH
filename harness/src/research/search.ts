@@ -17,6 +17,7 @@ import {
   writeBudget,
 } from "./researchIo.ts";
 import type { ResearchGap, Tier } from "./types.ts";
+import type { Allowance } from "./frames.ts";
 
 /**
  * S1 search stage (PLAN §3). One Luna web_search call plans and runs searches; candidate URLs are taken
@@ -75,6 +76,11 @@ export interface RunSearchOptions {
   hints?: string[];
   /** Code-driven search supplement (CP-029 finding a). `false` disables it. */
   supplement?: SupplementOptions | false;
+  /**
+   * AMENDMENT 12 frame allowance for the whole stage (main + supplement): searches and page GETs this stage may
+   * use. Absent = the job budget only (previous behaviour).
+   */
+  allowance?: Allowance;
 }
 
 interface SearchOutput {
@@ -143,7 +149,7 @@ function guideLine(aspect: string): string {
   return ASPECT_GUIDE.split("\n").find((l) => aspectKey(l.split("=")[0]) === k) ?? aspect;
 }
 
-interface CallOutcome {
+export interface CallOutcome {
   searches: number;
   rec: SearchCallRecord;
   filtered: CandidateFilterResult;
@@ -151,32 +157,50 @@ interface CallOutcome {
   skipped: number;
   selfReported: number;
   unverified: number;
+  /** Page GETs issued for this call's candidates (CP-025 unit). */
+  gets: number;
+  /** Candidates left unfetched because the call's fetch cap (AMENDMENT 12 frame allowance) was reached. */
+  deferred: number;
+}
+
+export interface SearchCallArgs {
+  task: string;
+  callId: string;
+  prompt: string;
+  cap: number;
+  instr: { url: string; note: string }[];
+  warnings: string[];
+  outputs: Set<string>;
+  logExtra?: Record<string, unknown>;
+  /** drop candidates whose URL already has a fetch decision / card in this work before fetching */
+  skipKnown?: boolean;
+  maxSelections?: number;
+  /** AMENDMENT 12: max page GETs this call may issue (frame allowance). Default: no extra cap (job budget only). */
+  fetchCap?: number;
+  /** AMENDMENT 12: aspects added to every selection (e.g. "plot" for the plot frame), so frames stay traceable. */
+  forceAspects?: string[];
+}
+
+/** The Luna web_search call alone (no file writes), so several calls can run in parallel (AMENDMENT 12). */
+export async function lunaSearch(ctx: StageContext, task: string, prompt: string) {
+  const at = isoLocal(ctx.now());
+  const res = await ctx.luna.call({ task, prompt, schema: SEARCH_SCHEMA, tools: "web_search", jobId: ctx.jobId, timeoutMs: SEARCH_TIMEOUT_MS });
+  return { res, at };
 }
 
 /**
  * One Luna web_search call → budget (from events) → search_log → filterSelections (event / instruction URLs
  * only) → candidates → the fetcher. Shared by the main call and the supplement calls (single fetch path).
  */
-async function searchCall(
-  ctx: StageContext,
-  a: {
-    task: string;
-    callId: string;
-    prompt: string;
-    cap: number;
-    instr: { url: string; note: string }[];
-    warnings: string[];
-    outputs: Set<string>;
-    logExtra?: { supplement: true; aspect: string };
-    /** drop candidates whose URL already has a fetch decision / card in this work before fetching */
-    skipKnown?: boolean;
-    maxSelections?: number;
-  },
-): Promise<CallOutcome> {
+export async function searchCall(ctx: StageContext, a: SearchCallArgs): Promise<CallOutcome> {
+  return processSearch(ctx, await lunaSearch(ctx, a.task, a.prompt), a);
+}
+
+/** Everything after the model call: budget, logs, candidate filter, fetch. Synchronous file writes only. */
+export async function processSearch(ctx: StageContext, called: Awaited<ReturnType<typeof lunaSearch>>, a: SearchCallArgs): Promise<CallOutcome> {
   const { task, warnings, outputs } = a;
   const budget = ctx.budget;
-  const at = isoLocal(ctx.now());
-  const res = await ctx.luna.call({ task, prompt: a.prompt, schema: SEARCH_SCHEMA, tools: "web_search", jobId: ctx.jobId, timeoutMs: SEARCH_TIMEOUT_MS });
+  const { res, at } = called;
   const out = (res.output ?? { selections: [], notes: null }) as SearchOutput;
   const events = res.toolEvents?.webSearch ?? [];
   if (res.toolEvents && res.toolEvents.otherToolItems > 0) {
@@ -191,13 +215,13 @@ async function searchCall(
   outputs.add(RESEARCH_FILES.budget);
 
   const rec = recordSearchCall(a.callId, task, at, events, []);
-  appendSearchLog(ctx.workDir, [a.logExtra ? ({ ...rec, ...a.logExtra } satisfies SupplementSearchRecord) : rec]);
+  appendSearchLog(ctx.workDir, [a.logExtra ? ({ ...rec, ...a.logExtra } as SearchCallRecord) : rec]);
   outputs.add(RESEARCH_FILES.searchLog);
 
   let selections: ModelSelection[] = (out.selections ?? []).map((s) => ({
     url: s.url,
     why: s.why,
-    aspects: s.aspects,
+    aspects: a.forceAspects ? [...new Set([...a.forceAspects, ...(s.aspects ?? [])])] : s.aspects,
     tier_suggested: s.tier_suggested,
   }));
   const maxSel = a.maxSelections ?? MAX_SELECTIONS;
@@ -234,22 +258,49 @@ async function searchCall(
   }
   let fetched = 0;
   let skipped = 0;
+  let gets = 0;
+  let deferred = 0;
   if (toFetch.length) {
-    const existing = readSources(ctx.workDir);
-    const fr = await ctx.fetcher.fetchAll(toFetch, { workDir: ctx.workDir, budget, existing, now: ctx.now, jobId: ctx.jobId });
-    appendSources(ctx.workDir, fr.cards);
-    appendFetchLog(ctx.workDir, fr.decisions);
-    appendGaps(ctx.workDir, fr.gaps);
-    writeBudget(ctx.workDir, budget);
-    outputs.add(RESEARCH_FILES.sources);
-    outputs.add(RESEARCH_FILES.fetchLog);
-    fetched = fr.cards.length;
-    skipped = fr.decisions.filter((d) => d.decision !== "fetched").length;
+    // AMENDMENT 12: with a frame allowance, hand the fetcher only as many candidates as GETs are left, and top up
+    // with the next candidates when some were skipped without a GET (robots / duplicate / denylist). Candidates
+    // never handed over are not recorded in fetch_log, so a later stage may select them again.
+    const cap = a.fetchCap ?? Number.POSITIVE_INFINITY;
+    let rest = toFetch;
+    while (rest.length && gets < cap) {
+      const n = Number.isFinite(cap) ? Math.max(1, cap - gets) : rest.length;
+      const chunk = rest.slice(0, n);
+      rest = rest.slice(n);
+      const existing = readSources(ctx.workDir);
+      const fr = await ctx.fetcher.fetchAll(chunk, { workDir: ctx.workDir, budget, existing, now: ctx.now, jobId: ctx.jobId });
+      appendSources(ctx.workDir, fr.cards);
+      appendFetchLog(ctx.workDir, fr.decisions);
+      appendGaps(ctx.workDir, fr.gaps);
+      writeBudget(ctx.workDir, budget);
+      outputs.add(RESEARCH_FILES.sources);
+      outputs.add(RESEARCH_FILES.fetchLog);
+      fetched += fr.cards.length;
+      skipped += fr.decisions.filter((d) => d.decision !== "fetched").length;
+      gets += fr.decisions.filter((d) => d.get_issued).length;
+      if (fr.decisions.some((d) => d.decision === "budget_exceeded")) {
+        rest = [];
+        break;
+      }
+    }
+    if (rest.length && budget.fetchesUsed >= budget.limits.fetches) {
+      // the job budget itself (not a frame allowance) is used up: let the fetcher record budget_exceeded + gaps (§1.3-5)
+      const fr = await ctx.fetcher.fetchAll(rest, { workDir: ctx.workDir, budget, existing: readSources(ctx.workDir), now: ctx.now, jobId: ctx.jobId });
+      appendFetchLog(ctx.workDir, fr.decisions);
+      appendGaps(ctx.workDir, fr.gaps);
+      skipped += fr.decisions.length;
+      rest = [];
+    }
+    deferred = rest.length;
     if (skipped) warnings.push(`${task}: ${skipped} candidate(s) not fetched (see fetch_log.json / gaps.json)`);
+    if (deferred) warnings.push(`${task}: ${deferred} candidate(s) deferred (frame fetch allowance ${cap} reached)`);
   } else if (!filtered.selected.length) {
     warnings.push(`${task}: no usable candidates`);
   }
-  return { searches, rec, filtered, fetched, skipped, selfReported, unverified };
+  return { searches, rec, filtered, fetched, skipped, selfReported, unverified, gets, deferred };
 }
 
 export async function runSearch(ctx: StageContext, opts: RunSearchOptions): Promise<StageResult> {
@@ -275,7 +326,13 @@ export async function runSearch(ctx: StageContext, opts: RunSearchOptions): Prom
       warnings: [gap.detail],
     };
   }
-  const cap = Math.min(opts.maxSearches ?? DEFAULT_MAX_SEARCHES, left);
+  const cap = Math.max(0, Math.min(opts.maxSearches ?? DEFAULT_MAX_SEARCHES, left, opts.allowance?.searches ?? Number.POSITIVE_INFINITY));
+  if (cap <= 0) {
+    const detail = `${task}: no search allowance left in this frame (budget ${budget.searchesUsed}/${budget.limits.searches}); skipped for aspects: ${opts.aspects.join(", ")}`;
+    appendGaps(ctx.workDir, [{ kind: "budget_exhausted", detail, at: nowIso() }]);
+    ctx.log(detail);
+    return { outputs: [RESEARCH_FILES.gaps], metrics: { searches: 0, results: 0, selected: 0, rejected_self_reported: 0, fetched: 0, skipped: 0, frame_exhausted: 1 }, warnings: [detail] };
+  }
 
   const prompt = buildSearchPrompt({
     work: opts.work,
@@ -294,9 +351,10 @@ export async function runSearch(ctx: StageContext, opts: RunSearchOptions): Prom
     instr: opts.instructionUrls ?? [],
     warnings,
     outputs,
+    fetchCap: opts.allowance?.fetches,
   });
 
-  const supp = await runSupplement(ctx, opts, main.searches, warnings, outputs);
+  const supp = await runSupplement(ctx, opts, main.searches, warnings, outputs, main.gets);
 
   const searches = main.searches + supp.searches;
   ctx.log(
@@ -315,6 +373,8 @@ export async function runSearch(ctx: StageContext, opts: RunSearchOptions): Prom
       unverified_open_pages: main.unverified + supp.unverified,
       fetched: main.fetched + supp.fetched,
       skipped: main.skipped + supp.skipped,
+      gets: main.gets + supp.gets,
+      deferred: main.deferred,
       supplement_enabled: supp.enabled ? 1 : 0,
       supplement_calls: supp.calls,
       supplement_failed_calls: supp.failed,
@@ -340,12 +400,13 @@ interface SupplementOutcome {
   unverified: number;
   fetched: number;
   skipped: number;
+  gets: number;
   uncoveredBefore: number;
   uncoveredAfter: number;
   uncoveredAfterList: string[];
 }
 
-async function runSupplement(ctx: StageContext, opts: RunSearchOptions, searchesMain: number, warnings: string[], outputs: Set<string>): Promise<SupplementOutcome> {
+async function runSupplement(ctx: StageContext, opts: RunSearchOptions, searchesMain: number, warnings: string[], outputs: Set<string>, getsMain = 0): Promise<SupplementOutcome> {
   const so = opts.supplement === false ? { enabled: false } : (opts.supplement ?? {});
   const enabled = so.enabled ?? opts.round === 1;
   const o = {
@@ -354,7 +415,7 @@ async function runSupplement(ctx: StageContext, opts: RunSearchOptions, searches
     searchesPerCall: so.searchesPerCall ?? SUPPLEMENT_SEARCHES_PER_CALL,
     reserveSearches: so.reserveSearches ?? SUPPLEMENT_RESERVE_SEARCHES,
   };
-  const outc: SupplementOutcome = { enabled, calls: 0, failed: 0, searches: 0, results: 0, selected: 0, rejected: 0, selfReported: 0, unverified: 0, fetched: 0, skipped: 0, uncoveredBefore: 0, uncoveredAfter: 0, uncoveredAfterList: [] };
+  const outc: SupplementOutcome = { enabled, calls: 0, failed: 0, searches: 0, results: 0, selected: 0, rejected: 0, selfReported: 0, unverified: 0, fetched: 0, skipped: 0, gets: 0, uncoveredBefore: 0, uncoveredAfter: 0, uncoveredAfterList: [] };
   const uncoveredNow = () => [...aspectCoverage(ctx.workDir, opts.aspects).entries()].filter(([, n]) => n === 0).map(([a]) => a);
   const before = aspectCoverage(ctx.workDir, opts.aspects);
   const { targets, uncovered } = supplementTargets(before, searchesMain, o);
@@ -369,7 +430,8 @@ async function runSupplement(ctx: StageContext, opts: RunSearchOptions, searches
   const skippedForBudget: string[] = [];
   for (let i = 0; i < targets.length; i++) {
     const aspect = targets[i];
-    const available = budget.limits.searches - budget.searchesUsed - o.reserveSearches;
+    const stageLeft = opts.allowance ? opts.allowance.searches - searchesMain - outc.searches : Number.POSITIVE_INFINITY;
+    const available = Math.min(budget.limits.searches - budget.searchesUsed - o.reserveSearches, stageLeft);
     if (available <= 0) {
       skippedForBudget.push(...targets.slice(i));
       break;
@@ -396,6 +458,7 @@ async function runSupplement(ctx: StageContext, opts: RunSearchOptions, searches
         logExtra: { supplement: true, aspect },
         skipKnown: true,
         maxSelections: SUPPLEMENT_MAX_SELECTIONS,
+        fetchCap: opts.allowance ? Math.max(0, opts.allowance.fetches - getsMain - outc.gets) : undefined,
       });
       outc.searches += r.searches;
       outc.results += r.rec.results.length;
@@ -405,6 +468,7 @@ async function runSupplement(ctx: StageContext, opts: RunSearchOptions, searches
       outc.unverified += r.unverified;
       outc.fetched += r.fetched;
       outc.skipped += r.skipped;
+      outc.gets += r.gets;
     } catch (e) {
       outc.failed++;
       warnings.push(`${task} [${aspect}]: supplement call failed (continuing): ${(e as Error).message.slice(0, 300)}`);
