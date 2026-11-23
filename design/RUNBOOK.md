@@ -25,7 +25,7 @@
 |---|---|---|
 | 1作品を投入する | `enqueue --work "<作品名>" [--range "<範囲>"] [--medium <媒体>]` | `queued to inbox: <job_id>`。範囲を省略すると「全体」。既存作品を同じ範囲で投入すると既存ジョブに合流する（範囲が違えば別ジョブ。例: 「全12話」で作った作品に範囲なしで投入すると新しい調査ジョブになる） |
 | 一覧（.txt／.csv）で投入する | `import <file> [--range …] [--dry-run]` | `batch B…: N 行 → 投入 n／エラー e／重複 d`。先に `--dry-run` で解釈を確かめるとよい。照会は `status --batch <batch_id>` |
-| 処理する | `worker`（常駐。止めるときは Ctrl+C で各ジョブが次の段の境目で停止）または `worker --once`（やることが無くなったら終了）。並行数は `harness/config/worker.json` の `max_concurrent_jobs`（既定3、1〜8）、1回だけ変えるなら `--concurrency n` | 受付済みの指示はまず同定され、その後最大 N 件が並行に S1〜S4 → ビルド → 公開待ち → 公開（公開は1件ずつ、完成順）。聞き返し中のジョブは枠を使わない。1作品の目安は 35〜45 分（3件の連投でも並行に進む）。Discord からは `start_worker`（タスク SFSHWORKER）で起動し、統括ジョブの実行中でも起動できる |
+| 処理する | `worker`（常駐。止めるときは Ctrl+C で各ジョブが次の段の境目で停止）または `worker --once`（やることが無くなったら終了）。並行数は `harness/config/worker.json` の `max_concurrent_jobs`（既定3、1〜8）、1回だけ変えるなら `--concurrency n` | 受付済みの指示はまず同定され、その後最大 N 件が並行に S1〜S4 → ビルド → 公開待ち → 公開（公開は1件ずつ、完成順）。聞き返し中のジョブは枠を使わない。1作品の目安は 35〜45 分（3件の連投でも並行に進む）。Discord からは `start_worker`（タスク SFSHWORKER）で起動し、統括ジョブの実行中でも起動できる。段の中の並行幅は `harness/config/parallel.json` の `stages`（既定6）、全ジョブ・全プロセスで同時に動くモデル呼び出しの上限は同じファイルの `global_model_calls`（既定6。PC が重いときはここを下げる。使用中のスロットは `logs/model-slots/`）（A14） |
 | 聞き返しに答える | `status <job_id>` で候補を見て `answer <job_id> --pick <n>`（または `--work`／`--medium`／`--range`） | ジョブが `queued` に進む |
 | 取り消す | `cancel <job_id>`（バッチは `cancel --batch <batch_id>`） | `queued` 以前は即時、実行中は次の段の境目で `cancelled` |
 | 既存作品の文章だけ作り直す（再調査なし） | `regen <work_id>` → `publish` | 執筆・組版・自動確認だけを保存済みの調査から再実行する（検索・取得 0）。前の状態は `works/<id>/gen/_backup-<時刻>/`。worker と同時に動かさない |

@@ -1,4 +1,5 @@
 import { isoLocal } from "../model/callLog.ts";
+import { stageWidth } from "../util/parallel.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
 import { pool } from "../util/pool.ts";
 import { allowance, FRAMES } from "./frames.ts";
@@ -40,7 +41,7 @@ export async function runPlotSearch(ctx: StageContext, opts: { work: WorkBrief }
     ...segs.map((segment) => ({ segment, cap: PLOT_SEGMENT_SEARCHES, maxSel: TARGET_MAX_SELECTIONS })),
   ];
   const task = "s1.search.plot";
-  const called = await pool(calls, 3, async (c) => {
+  const called = await pool(calls, stageWidth("search"), async (c) => { // A14: parallel.json stages.search
     try {
       return await lunaSearch(ctx, task, buildPlotSearchPrompt({ work: opts.work, maxSearches: c.cap, segment: c.segment, avoidUrls: avoid, maxSelections: c.maxSel }));
     } catch (e) {

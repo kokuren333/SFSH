@@ -60,22 +60,13 @@ test("writePages: based_on filter, spoiler max, copied_phrase deletion, 30-char 
       (req: ModelRequest) => {
         if (req.task === "s3.write") return writeOutput();
         if (req.task === "s3.write.revise") {
+          // A14: one revise call per page; answer by target (finding ids depend on the page order)
           haikuRevise++;
-          if (haikuRevise === 1)
-            return {
-              responses: [
-                { finding_id: "r1f01", action: "declined", reason: "自分の言葉で書いている" },
-                { finding_id: "r1f02", action: "revised", reason: "根拠に沿って弱めた" },
-              ],
-              updated: [upd({ id: "ov01", heading: "作品の骨格", paragraphs: ["甲と乙の信頼が崩れていく構図が軸になる。"], based_on: ["ch01", "oc01", "ev02", "ch04"], epistemic: "canon" }), upd({ id: "new99", paragraphs: ["新規は無視される"] })],
-              removed_ids: [],
-            };
+          const fs = [...req.prompt.matchAll(/^- (r\d+f\d+) \[(\w+)\] (\S+):/gm)].map((m) => ({ id: m[1]!, round: Number(m[1]!.slice(1, 2)), target: m[3]! }));
+          const ovFix = fs.find((f) => f.target === "ov01" && f.round === 1);
           return {
-            responses: [
-              { finding_id: "r2f01", action: "declined", reason: "直さない" },
-              { finding_id: "r2f02", action: "declined", reason: "具体性は必要" },
-            ],
-            updated: [],
+            responses: fs.map((f) => (f === ovFix ? { finding_id: f.id, action: "revised", reason: "根拠に沿って弱めた" } : { finding_id: f.id, action: "declined", reason: f.round === 1 ? "自分の言葉で書いている" : "直さない" })),
+            updated: ovFix ? [upd({ id: "ov01", heading: "作品の骨格", paragraphs: ["甲と乙の信頼が崩れていく構図が軸になる。"], based_on: ["ch01", "oc01", "ev02", "ch04"], epistemic: "canon" }), upd({ id: "new99", paragraphs: ["新規は無視される"] })] : [],
             removed_ids: [],
           };
         }
@@ -94,20 +85,20 @@ test("writePages: based_on filter, spoiler max, copied_phrase deletion, 30-char 
       "luna",
       (req: ModelRequest) => {
         if (req.task !== "s3.write.review") return undefined;
+        // A14: one review call per page; findings only for the units in this call
         lunaRound++;
-        if (lunaRound === 1)
-          return {
-            findings: [
+        const has = (id: string) => req.prompt.includes(`## ${id}（`);
+        const round2 = /今回は第2回/.test(req.prompt);
+        const all = round2
+          ? [
+              { target_id: "fn_reverse_plot", type: "copied_phrase", severity: "high", evidence: "まだ近い" },
+              { target_id: "fn_matrix", type: "too_concrete", severity: "low", evidence: "場面に寄りすぎ" },
+            ]
+          : [
               { target_id: "fn_reverse_plot", type: "copied_phrase", severity: "high", evidence: "言い回しが近い" },
               { target_id: "ov01", type: "unsupported", severity: "medium", evidence: "根拠が弱い" },
-            ],
-          };
-        return {
-          findings: [
-            { target_id: "fn_reverse_plot", type: "copied_phrase", severity: "high", evidence: "まだ近い" },
-            { target_id: "fn_matrix", type: "too_concrete", severity: "low", evidence: "場面に寄りすぎ" },
-          ],
-        };
+            ];
+        return { findings: all.filter((f) => has(f.target_id)) };
       },
       calls,
     );
@@ -119,10 +110,17 @@ test("writePages: based_on filter, spoiler max, copied_phrase deletion, 30-char 
     // writing spec v2: the write runs as parallel part calls (frame + one per essay page) before the review loop
     const writes = calls.filter((c) => c.req.task === "s3.write").length;
     assert.equal(writes, 4, "frame + themes + context + interpretations");
+    // A14: inside a round the review / revise run per page in parallel; the rounds stay in order
+    const seq = calls.map((c) => `${c.port}:${c.req.task}`);
     assert.deepEqual(
-      calls.map((c) => `${c.port}:${c.req.task}`),
-      [...Array(writes).fill("haiku:s3.write"), "luna:s3.write.review", "haiku:s3.write.revise", "luna:s3.write.review", "haiku:s3.write.revise", "haiku:s3.write.rewrite"],
+      seq.filter((x, i) => x !== seq[i - 1]),
+      ["haiku:s3.write", "luna:s3.write.review", "haiku:s3.write.revise", "luna:s3.write.review", "haiku:s3.write.revise", "haiku:s3.write.rewrite"],
     );
+    const firstRevise = calls.findIndex((c) => c.req.task === "s3.write.revise");
+    const pagesReviewed = calls.slice(0, firstRevise).filter((c) => c.req.task === "s3.write.review").map((c) => [...c.req.prompt.matchAll(/^## \S+（(\w+)\//gm)].map((m) => m[1]));
+    for (const ps of pagesReviewed) assert.equal(new Set(ps).size, 1, "one page per review call");
+    assert.equal(new Set(pagesReviewed.map((ps) => ps[0])).size, pagesReviewed.length, "each page reviewed once per round");
+    assert.equal(calls.filter((c) => c.req.task === "s3.write.revise").length, 3, "round 1: overview + figure_notes; round 2: figure_notes");
     for (const c of calls) assert.equal(c.req.jobId, "job-gen-test");
     const writeReq = calls[0].req.prompt;
     for (const s of [HIDDEN_LABEL, INTERNAL_ANALYSIS, EXCERPT_TEXT, "非公開の秘密", "未確認の出来事", "非公開人物の動機"]) assert.equal(writeReq.includes(s), false, `write prompt leaked ${s}`);
@@ -219,7 +217,8 @@ test("writePages: failed rewrite → flagged sentences dropped; fully copied blo
     assert.equal(res.metrics.guard_dropped_units, 1);
     assert.ok(res.warnings.some((w) => w.includes("rewrite call failed")));
     assert.equal(calls.filter((c) => c.req.task === "s3.write.rewrite").length, 1, "exactly one rewrite attempt");
-    assert.equal(calls.filter((c) => c.req.task === "s3.write.review").length, 1, "no findings → one review round");
+    const rv = calls.filter((c) => c.req.task === "s3.write.review");
+    assert.ok(rv.length >= 1 && rv.every((c) => !/今回は第2回/.test(c.req.prompt)), "no findings → one review round (one call per page)");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

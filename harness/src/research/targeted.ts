@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { stageWidth } from "../util/parallel.ts";
 import path from "node:path";
 import { isoLocal } from "../model/callLog.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
@@ -46,6 +47,7 @@ export const TARGETED = {
   /** page GETs per target (top-up allowed when some candidates are skipped) */
   fetchesPerTarget: 4,
   /** parallel Luna web_search calls */
+  /** A12 value; since A14 the width is parallel.json stages.search (default 6) */
   concurrency: 3,
   followupMaxRounds: 3,
   gapfillMaxRounds: 2,
@@ -100,7 +102,7 @@ export async function targetedRound(
   if (!targets.length) return result;
   const avoid = avoidUrls(ctx.workDir);
   const task = `s1.${o.stage}.r${o.round}`;
-  const called = await pool(targets, TARGETED.concurrency, async (t) => {
+  const called = await pool(targets, stageWidth("search"), async (t) => { // A14: parallel.json stages.search
     try {
       return await lunaSearch(ctx, task, buildTargetSearchPrompt({ work: o.work, target: t.target, aspects: t.aspects, maxSearches: per, hints: t.hints, avoidUrls: avoid }));
     } catch (e) {

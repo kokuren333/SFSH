@@ -153,16 +153,22 @@ test("regen: write → compose → autocheck from saved research, previous outpu
     const writes = s.calls.filter((c) => c.req.task === "s3.write").length;
     assert.ok(writes >= 3, "v2: frame + essay pages written as parallel calls");
     const pageCalls = s.calls.filter((c) => !c.req.task.startsWith("s3.synopsis"));
-    assert.deepEqual(pageCalls.map((c) => `${c.port}:${c.req.task}`), [...Array(writes).fill("haiku:s3.write"), "luna:s3.write.review"]);
-    assert.deepEqual(s.calls.filter((c) => c.req.task.startsWith("s3.synopsis")).map((c) => `${c.port}:${c.req.task}`), ["haiku:s3.synopsis.plan", "haiku:s3.synopsis.chapter", "luna:s3.synopsis.review"]);
+    // A14: the review runs per page (pages) / per run of chapters (synopsis) in parallel, one round (no findings)
+    const pageReviews = pageCalls.filter((c) => c.req.task === "s3.write.review").length;
+    assert.ok(pageReviews >= 1);
+    assert.deepEqual(pageCalls.map((c) => `${c.port}:${c.req.task}`), [...Array(writes).fill("haiku:s3.write"), ...Array(pageReviews).fill("luna:s3.write.review")]);
+    const synCalls = s.calls.filter((c) => c.req.task.startsWith("s3.synopsis")).map((c) => `${c.port}:${c.req.task}`);
+    const synReviews = synCalls.filter((x) => x === "luna:s3.synopsis.review").length;
+    assert.deepEqual(synCalls, ["haiku:s3.synopsis.plan", "haiku:s3.synopsis.chapter", ...Array(synReviews).fill("luna:s3.synopsis.review")]);
+    assert.equal(synReviews, 2, "intro + 1 chapter → 2 partitions");
     for (const c of s.calls) {
       assert.equal(c.req.jobId, rec.job_id);
       assert.equal(c.req.tools, "none");
     }
     assert.match(rec.job_id, new RegExp(`^regen-\\d{8}-\\d{9}-${GEN_WORK_ID}$`));
     assert.deepEqual(rec.network, { fetcher_calls: 0, searches_used: 0, fetches_used: 0, budget_limits: { searches: 0, fetches: 0, wallMs: 0 } });
-    assert.equal(rec.model_calls.total, writes + 1 + 3);
-    assert.deepEqual(rec.model_calls.by_port, { haiku: { ok: writes + 2, failed: 0 }, luna: { ok: 2, failed: 0 } });
+    assert.equal(rec.model_calls.total, writes + pageReviews + 2 + synReviews);
+    assert.deepEqual(rec.model_calls.by_port, { haiku: { ok: writes + 2, failed: 0 }, luna: { ok: pageReviews + synReviews, failed: 0 } });
 
     // new text everywhere
     const overview = read(s.dir, "gen/pages/overview.json").blocks;

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { dropUndef } from "./haikuCli.ts";
 import { makeTempDir, resolveCodex, rmTemp, runProcess, type Command } from "./proc.ts";
+import { withModelSlot } from "./slots.ts";
 import { ModelCallError, type RawCallResult, type RawInvoker, type TokenUsage, type ToolEvents, type ToolMode, type WebSearchEvent } from "./types.ts";
 import { strictSchemaViolations } from "./validate.ts";
 
@@ -62,7 +63,7 @@ export function lunaCliInvoker(modelId: string, cmd: Command = resolveCodex()): 
       ];
       let r;
       try {
-        r = await runProcess(cmd, args, { stdin: req.prompt, cwd, timeoutMs: req.timeoutMs });
+        r = await withModelSlot(() => runProcess(cmd, args, { stdin: req.prompt, cwd, timeoutMs: req.timeoutMs })); // A14: global cap
       } catch (e) {
         throw new ModelCallError("spawn", "luna", modelId, String(e));
       }

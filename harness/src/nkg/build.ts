@@ -59,6 +59,8 @@ import {
 import { summarizeReviews } from "./reviewSummary.ts";
 import type { Gap, ModelName, ModuleId, Nkg, NkgWork, Phase, ReviewState } from "./types.ts";
 import { writeValidation } from "./validate.ts";
+import { stageWidth } from "../util/parallel.ts";
+import { pool } from "../util/pool.ts";
 
 export const AUTHORING_TIMEOUT_MS = 600_000;
 /** AMENDMENT 12: authoring waves (groups of one wave run in parallel and see the drafts of the earlier waves). */
@@ -263,8 +265,9 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
   const results = new Map<string, Draft[]>();
   for (const wave of waves) {
     const existing = [...prior, ...drafts];
-    const settled = await Promise.allSettled(
-      wave.map(async (g) => {
+    // AMENDMENT 14: the groups of one wave run ≤ parallel.json stages.nkg_author at a time (the waves stay ordered)
+    const settled = await pool(wave, stageWidth("nkg_author"), (g) =>
+      (async (): Promise<Draft[] | null> => {
         const specs = enabledSpecs(g, inp.enabled);
         if (!specs.length) return null;
         const res = await author1(g, specs, existing);
@@ -291,7 +294,10 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
           if (expectedButMissing(specs, got2, inp).length < missingKinds.length || (expectedButMissing(specs, got2, inp).length === missingKinds.length && got2.length > got.length)) got = got2;
         }
         return got;
-      }),
+      })().then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason: unknown) => ({ status: "rejected" as const, reason }),
+      ),
     );
     for (let i = 0; i < wave.length; i++) {
       const s = settled[i]!;
@@ -327,37 +333,88 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
   // review loop (reviewer = opposite model, findings only; author answers every finding). §3.3, ≤ maxRounds rounds.
   const firstDraftCounts = countByType(drafts);
   const added = new Set<string>();
+  // AMENDMENT 14: inside one round the review and the revision run per call group in parallel (≤ parallel.json
+  // stages.nkg_review); the rounds stay sequential (round k+1 reviews the state revised in round k). Each group call sees
+  // its own elements in full and every other element (other groups, other layer) as id/type/label context. Findings are
+  // routed to the group that owns the target (else to the group whose review raised them); revisions are applied in the
+  // fixed group order so the result does not depend on which call finished first.
+  const groupOfKind = new Map<string, string>();
+  for (const g of cfg.groups) for (const k of g.kinds) groupOfKind.set(k, g.name);
+  const reviewGroups = cfg.groups.map((g) => ({ name: g.name, specs: enabledSpecs(g, inp.enabled) })).filter((g) => g.specs.length);
+  const groupOf = (d: Draft) => groupOfKind.get(d._type) ?? reviewGroups[reviewGroups.length - 1]?.name ?? "";
+  const reviewWidth = stageWidth("nkg_review");
+  const originOf = new Map<string, string>(); // finding_id → group whose review raised it
+  const routeOf = (state: Draft[], f: { finding_id: string; target_id: string }) => {
+    const owner = state.find((d) => d.id === String(f.target_id ?? "").trim().toLowerCase());
+    return owner ? groupOf(owner) : originOf.get(f.finding_id) ?? reviewGroups[0]?.name ?? "";
+  };
   const outcome = await runReviewLoop<Draft[]>({
     initial: drafts,
     maxRounds,
     ids: (s) => s.map((d) => d.id),
     review: async (state, round, rounds: ReviewRound[] = []) => {
       if (!state.length) return [];
-      const r = await reviewerPort.call({
-        task: `s2.${cfg.layer}.review`,
-        prompt:
-          layerReviewPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(state, allSpecs), claims: reviewClaimsFor(state), context: summarize(prior) }) +
-          priorRoundsBlock(rounds, round, maxRounds),
-        schema: FINDINGS_SCHEMA,
-        ...toolsFor(reviewer),
-        jobId: ctx.jobId,
-        timeoutMs: AUTHORING_TIMEOUT_MS,
+      const active = reviewGroups.filter((g) => state.some((d) => groupOf(d) === g.name));
+      const per = await pool(active, reviewWidth, async (g) => {
+        const mine = state.filter((d) => groupOf(d) === g.name);
+        const others = state.filter((d) => groupOf(d) !== g.name);
+        const priorMine = rounds.map((r) => ({ ...r, findings: r.findings.filter((f) => routeOf(state, f) === g.name) })).filter((r) => r.findings.length);
+        const r = await reviewerPort.call({
+          task: `s2.${cfg.layer}.review`,
+          prompt:
+            layerReviewPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(mine, g.specs), claims: reviewClaimsFor(mine), context: [...summarize(prior), ...summarize(others)] }) +
+            priorRoundsBlock(priorMine, round, maxRounds),
+          schema: FINDINGS_SCHEMA,
+          ...toolsFor(reviewer),
+          jobId: ctx.jobId,
+          timeoutMs: AUTHORING_TIMEOUT_MS,
+        });
+        calls++;
+        return ((r.output as { findings?: RawFinding[] }).findings ?? []) as RawFinding[];
       });
-      calls++;
-      return ((r.output as { findings?: RawFinding[] }).findings ?? []) as RawFinding[];
+      const all: RawFinding[] = [];
+      active.forEach((g, gi) => {
+        for (const f of per[gi]!) {
+          all.push(f);
+          originOf.set(`r${round}f${String(all.length).padStart(2, "0")}`, g.name);
+        }
+      });
+      return all;
     },
     revise: async (state, findings: Finding[], round) => {
-      const r = await authorPort.call({
-        task: `s2.${cfg.layer}.revise`,
-        prompt: revisionPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(state, allSpecs), findings, claims: reviewClaimsFor(state) }) + lastRoundNote(round, maxRounds),
-        schema: revisionSchema(allSpecs),
-        ...toolsFor(author),
-        jobId: ctx.jobId,
-        timeoutMs: AUTHORING_TIMEOUT_MS,
+      const byGroup = new Map<string, Finding[]>();
+      for (const f of findings) {
+        const g = routeOf(state, f);
+        byGroup.set(g, [...(byGroup.get(g) ?? []), f]);
+      }
+      const work = reviewGroups.filter((g) => byGroup.has(g.name));
+      const outs = await pool(work, reviewWidth, async (g) => {
+        const mine = state.filter((d) => groupOf(d) === g.name);
+        const others = state.filter((d) => groupOf(d) !== g.name);
+        const ctxLines = [...summarize(prior), ...summarize(others)].map((e) => `- ${e.id} [${e.type}] ${e.label}`).join("\n") || "- （なし）";
+        const ctxBlock = `\n# 参照できる他の要素（この呼び出しでは変更しない。id で参照してよい）\n${ctxLines}\n`;
+        const r = await authorPort.call({
+          task: `s2.${cfg.layer}.revise`,
+          prompt: revisionPrompt({ layer: cfg.layer, title: inp.title, elements: draftsToOutput(mine, g.specs), findings: byGroup.get(g.name)!, claims: reviewClaimsFor(mine) }) + ctxBlock + lastRoundNote(round, maxRounds),
+          schema: revisionSchema(g.specs),
+          ...toolsFor(author),
+          jobId: ctx.jobId,
+          timeoutMs: AUTHORING_TIMEOUT_MS,
+        });
+        calls++;
+        return r.output as { responses: FindingResponse[]; updated: unknown; removed_ids: string[] };
       });
-      calls++;
-      const out = r.output as { responses: FindingResponse[]; updated: unknown; removed_ids: string[] };
-      return { state: applyRevision(state, out, allSpecs, taken, renames, added), responses: out.responses ?? [] };
+      let next = state;
+      const responses: FindingResponse[] = [];
+      work.forEach((g, gi) => {
+        const out = outs[gi]!;
+        const own = new Set(next.filter((d) => groupOf(d) === g.name).map((d) => d.id));
+        // a group call may only remove its own elements
+        const removed = (out.removed_ids ?? []).filter((x) => own.has(String(x).trim().toLowerCase()));
+        next = applyRevision(next, { updated: out.updated, removed_ids: removed }, g.specs, taken, renames, added);
+        responses.push(...(out.responses ?? []));
+      });
+      return { state: next, responses };
     },
   });
   const unresolved: UnresolvedEntry[] = outcome.unresolved ?? [];

@@ -43,3 +43,6 @@ works/*/gen/_backup-*/
 
 # AMENDMENT 12 rework backups (sfsh job rework; local rollback copies of research/nkg/gen, includes raw pages)
 works/*/_rework-backup-*/
+
+# AMENDMENT 14: global model-call slots (runtime locks)
+/logs/model-slots/

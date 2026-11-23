@@ -23,6 +23,7 @@ import {
   advisoryFrom,
   completedResponses,
   copiedPhraseTargets,
+  partitionedRound,
   runReviewLoop,
   type FindingResponse,
   type RawFinding,
@@ -50,6 +51,8 @@ import {
   type WritePart,
 } from "./prompts.ts";
 import { S3_TIMEOUT_MS } from "./tags.ts";
+import { stageWidth } from "../util/parallel.ts";
+import { pool } from "../util/pool.ts";
 
 /** §5.1 A-1 / PLAN M1 §2: continuous verbatim match threshold (normalized chars). */
 export const VERBATIM_THRESHOLD = 30;
@@ -544,8 +547,7 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
   // 1) Haiku writes everything from the projection only — v2: one call per part, in parallel (frame + each essay page)
   const essays = essayPages(pw);
   const parts: WritePart[] = ["frame", ...ESSAY_PAGES.filter((p) => essays[p])];
-  const outs = await Promise.all(
-    parts.map((part) =>
+  const outs = await pool(parts, stageWidth("write"), (part) => // A14: parallel.json stages.write
       ctx.haiku.call({
         task: "s3.write",
         prompt: writePrompt({
@@ -561,7 +563,6 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
         jobId: ctx.jobId,
         timeoutMs: S3_TIMEOUT_MS,
       }),
-    ),
   );
   calls += outs.length;
   const pick = (part: WritePart, key: string): unknown[] => {
@@ -580,35 +581,41 @@ export async function writePages(ctx: StageContext): Promise<StageResult> {
   // 2) Luna reviews (findings only), Haiku revises — max 2 rounds
   const claims = reviewClaims(ctx.workDir, pw);
   const removedByAuthor: string[] = [];
+  // AMENDMENT 14: inside one round the review and the revision run per page in parallel (≤ parallel.json stages.write);
+  // the rounds stay sequential.
   const outcome = await runReviewLoop<Unit[]>({
     initial: written,
     maxRounds: REVIEW_MAX_ROUNDS,
     ids: (s) => s.map((u) => u.id),
-    review: async (state, round, prior) => {
-      if (!state.length) return [];
-      const r = await ctx.luna.call({
-        task: "s3.write.review",
-        prompt: writeReviewPrompt({ title, units: state.map(view), elements, claims, prior, round, maxRounds: REVIEW_MAX_ROUNDS }),
-        schema: FINDINGS_SCHEMA,
-        tools: "none",
-        jobId: ctx.jobId,
-        timeoutMs: S3_TIMEOUT_MS,
-      });
-      calls++;
-      return ((r.output as { findings?: RawFinding[] }).findings ?? []) as RawFinding[];
-    },
-    revise: async (state, findings, round) => {
-      const r = await ctx.haiku.call({
-        task: "s3.write.revise",
-        prompt: writeRevisePrompt({ title, units: state.map(view), findings, elements, round, maxRounds: REVIEW_MAX_ROUNDS }),
-        schema: WRITE_REVISION_SCHEMA,
-        jobId: ctx.jobId,
-        timeoutMs: S3_TIMEOUT_MS,
-      });
-      calls++;
-      const out = r.output as { responses?: FindingResponse[] };
-      return { state: applyWriteRevision(state, r.output, removedByAuthor), responses: out.responses ?? [] };
-    },
+    ...partitionedRound<Unit>({
+      partOf: (u) => u.page,
+      width: stageWidth("write"),
+      pool,
+      review: async (units, _others, round, prior) => {
+        const r = await ctx.luna.call({
+          task: "s3.write.review",
+          prompt: writeReviewPrompt({ title, units: units.map(view), elements, claims, prior, round, maxRounds: REVIEW_MAX_ROUNDS }),
+          schema: FINDINGS_SCHEMA,
+          tools: "none",
+          jobId: ctx.jobId,
+          timeoutMs: S3_TIMEOUT_MS,
+        });
+        calls++;
+        return ((r.output as { findings?: RawFinding[] }).findings ?? []) as RawFinding[];
+      },
+      revise: async (units, findings, round) => {
+        const r = await ctx.haiku.call({
+          task: "s3.write.revise",
+          prompt: writeRevisePrompt({ title, units: units.map(view), findings, elements, round, maxRounds: REVIEW_MAX_ROUNDS }),
+          schema: WRITE_REVISION_SCHEMA,
+          jobId: ctx.jobId,
+          timeoutMs: S3_TIMEOUT_MS,
+        });
+        calls++;
+        return { output: r.output, responses: (r.output as { responses?: FindingResponse[] }).responses ?? [] };
+      },
+      apply: (state, out) => applyWriteRevision(state, out, removedByAuthor),
+    }),
   });
   const unresolved = unresolvedOf(outcome);
   const deleted = copiedPhraseTargets(unresolved).filter((id) => outcome.state.some((u) => u.id === id));

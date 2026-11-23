@@ -52,7 +52,9 @@ function ports(calls: FakeCall[]) {
     (req: ModelRequest) => {
       if (req.task !== "s3.synopsis.review") return undefined;
       lunaRound++;
-      return { findings: [{ target_id: "syn_c02_s02", type: "copied_phrase", severity: "high", evidence: lunaRound === 1 ? "言い回しが近い" : "まだ近い" }] };
+      // A14: one review call per run of chapters; the finding only where its unit is in the prompt
+      if (!req.prompt.includes("syn_c02_s02")) return { findings: [] };
+      return { findings: [{ target_id: "syn_c02_s02", type: "copied_phrase", severity: "high", evidence: /今回は第2回/.test(req.prompt) ? "まだ近い" : "言い回しが近い" }] };
     },
     calls,
   );
@@ -69,10 +71,14 @@ test("writeSynopsis: plan → parallel chapters → review → copied_phrase del
     await projectPublic(ctx);
     const res = await writeSynopsis(ctx);
 
+    // A14: intro + 2 chapters → 3 review partitions per round (parallel); rounds stay in order; one revise per round
+    const seq = calls.map((c) => `${c.port}:${c.req.task}`);
     assert.deepEqual(
-      calls.map((c) => `${c.port}:${c.req.task}`),
-      ["haiku:s3.synopsis.plan", "haiku:s3.synopsis.chapter", "haiku:s3.synopsis.chapter", "luna:s3.synopsis.review", "haiku:s3.synopsis.revise", "luna:s3.synopsis.review", "haiku:s3.synopsis.revise", "haiku:s3.synopsis.rewrite"],
+      seq.filter((x, i) => x !== seq[i - 1]),
+      ["haiku:s3.synopsis.plan", "haiku:s3.synopsis.chapter", "luna:s3.synopsis.review", "haiku:s3.synopsis.revise", "luna:s3.synopsis.review", "haiku:s3.synopsis.revise", "haiku:s3.synopsis.rewrite"],
     );
+    assert.equal(seq.filter((x) => x === "luna:s3.synopsis.review").length, 6, "3 partitions × 2 rounds");
+    assert.equal(seq.filter((x) => x === "haiku:s3.synopsis.revise").length, 2, "only the partition with the finding is revised");
     const plan = calls[0]!.req.prompt;
     for (const s of [HIDDEN_LABEL, INTERNAL_ANALYSIS, EXCERPT_TEXT, PUBLIC_ANALYSIS, "崩壊の読み解き。"]) assert.equal(plan.includes(s), false, `synopsis material leaked ${s} (non-public or interpretation layer)`);
     assert.ok(plan.includes("主張 c0001"), "canon story claims are part of the material");

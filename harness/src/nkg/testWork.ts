@@ -123,6 +123,11 @@ export function fixtureContext(dir: string, luna: ModelPort, haiku: ModelPort, l
 }
 
 /** Canned outputs for the full S2 chain on the fixture work. */
+/** Findings listed in an S2 revision prompt ("- r1f01 [type/severity] 対象 <id>: ..."). */
+function revisionFindings(prompt: string): { id: string; target: string }[] {
+  return [...prompt.matchAll(/^- (r\d+f\d+) \[[^\]]+\] 対象 (\S+?):/gm)].map((m) => ({ id: m[1]!, target: m[2]! }));
+}
+
 export function cannedS2(req: ModelRequest): unknown {
   const g = (partial: Record<string, unknown[]>) => fillGroup(req.schema, partial);
   const gu = (partial: Record<string, unknown[]>) => fillGroup((req.schema as { properties: { updated: object } }).properties.updated, partial);
@@ -196,27 +201,33 @@ export function cannedS2(req: ModelRequest): unknown {
         ],
         about: [mEdge({ id: "ab01", from: "cx01", to: "work", claim_refs: ["c0027"] })],
       });
-    case "s2.fact.review":
+    case "s2.fact.review": {
+      // A14: the review runs per call group — findings only for the elements in this call (the missing-structure
+      // finding comes from the people group's review)
+      const has = (id: string) => req.prompt.includes(`"id":"${id}"`);
       return {
         findings: [
-          { target_id: "ch02", type: "overreach", severity: "medium", evidence: "c0004 は裏切りの動機まで述べていない" },
-          { target_id: "ev02", type: "too_concrete", severity: "low", evidence: "場面の説明に寄っている" },
-          { target_id: "layer", type: "missing", severity: "medium", evidence: "c0005 の組織が無い" },
+          ...(has("ev02") ? [{ target_id: "ev02", type: "too_concrete", severity: "low", evidence: "場面の説明に寄っている" }] : []),
+          ...(has("ch02") ? [{ target_id: "ch02", type: "overreach", severity: "medium", evidence: "c0004 は裏切りの動機まで述べていない" }] : []),
+          ...(has("ch01") ? [{ target_id: "layer", type: "missing", severity: "medium", evidence: "c0005 の組織が無い" }] : []),
         ],
       };
-    case "s2.fact.revise":
+    }
+    case "s2.fact.revise": {
+      const fs = revisionFindings(req.prompt);
+      const ev = fs.find((x) => x.target === "ev02");
+      const lay = fs.find((x) => x.target === "layer");
       return {
-        responses: [
-          { finding_id: "r1f01", action: "declined", reason: "c0003 と合わせれば支持される" },
-          { finding_id: "r1f02", action: "revised", reason: "抽象化した" },
-          { finding_id: "r1f03", action: "revised", reason: "組織を追加" },
-        ],
+        responses: fs.map((x) =>
+          x.target === "ch02" ? { finding_id: x.id, action: "declined", reason: "c0003 と合わせれば支持される" } : { finding_id: x.id, action: "revised", reason: x.target === "layer" ? "組織を追加" : "抽象化した" },
+        ),
         updated: gu({
-          events: [mNode({ id: "ev02", label: "真相の開示", claim_refs: ["c0007"], phase_ref: "ph3", spoiler: "ending", story_order: 3, disclosure_phase: "ph3" })],
-          factions: [mNode({ id: "fa01", label: "探偵事務所", claim_refs: ["c0005"] })],
+          events: ev ? [mNode({ id: "ev02", label: "真相の開示", claim_refs: ["c0007"], phase_ref: "ph3", spoiler: "ending", story_order: 3, disclosure_phase: "ph3" })] : [],
+          factions: lay ? [mNode({ id: "fa01", label: "探偵事務所", claim_refs: ["c0005"] })] : [],
         }),
         removed_ids: [],
       };
+    }
     case "s2.interp.reverse_plot":
       return g({
         outcomes: [mNode({ id: "oc01", label: "盟友関係の終焉", claim_refs: ["c0014"], phase_ref: "ph3", spoiler: "ending" })],
@@ -269,15 +280,18 @@ export function cannedS2(req: ModelRequest): unknown {
         ],
       });
     case "s2.interp.review":
-      return { findings: [{ target_id: "th01", type: "overreach", severity: "low", evidence: "ev03 からの飛躍がある" }] };
-    case "s2.interp.revise":
+      return { findings: req.prompt.includes(`"id":"th01"`) ? [{ target_id: "th01", type: "overreach", severity: "low", evidence: "ev03 からの飛躍がある" }] : [] };
+    case "s2.interp.revise": {
+      const fs = revisionFindings(req.prompt);
+      const th = fs.find((x) => x.target === "th01");
       return {
-        responses: [{ finding_id: "r1f01", action: "revised", reason: "根拠に沿って弱めた" }],
+        responses: fs.map((x) => ({ finding_id: x.id, action: "revised", reason: "根拠に沿って弱めた" })),
         updated: gu({
-          themes: [mNode({ id: "th01", label: "信頼の代償", question: "信頼は報われるか", values: ["信頼", "自己保存"], tension: "信じることと身を守ること", epistemic: "sfsh_analysis", based_on: ["ch01", "ev03"], analysis: "修正稿" })],
+          themes: th ? [mNode({ id: "th01", label: "信頼の代償", question: "信頼は報われるか", values: ["信頼", "自己保存"], tension: "信じることと身を守ること", epistemic: "sfsh_analysis", based_on: ["ch01", "ev03"], analysis: "修正稿" })] : [],
         }),
         removed_ids: [],
       };
+    }
     default:
       return undefined;
   }

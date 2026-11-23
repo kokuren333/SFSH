@@ -1,4 +1,5 @@
 import { makeTempDir, resolveClaude, rmTemp, runProcess, type Command } from "./proc.ts";
+import { withModelSlot } from "./slots.ts";
 import { ModelCallError, type RawCallResult, type RawInvoker, type TokenUsage } from "./types.ts";
 
 /**
@@ -27,7 +28,7 @@ export function haikuCliInvoker(modelId: string, cmd: Command = resolveClaude())
       ];
       let r;
       try {
-        r = await runProcess(cmd, args, { stdin: req.prompt, cwd, timeoutMs: req.timeoutMs });
+        r = await withModelSlot(() => runProcess(cmd, args, { stdin: req.prompt, cwd, timeoutMs: req.timeoutMs })); // A14: global cap
       } catch (e) {
         throw new ModelCallError("spawn", "haiku", modelId, String(e));
       }

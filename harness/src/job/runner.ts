@@ -250,7 +250,11 @@ export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Pro
         // AMENDMENT 11: the page text and the long synopsis are written in parallel (both read the projection only
         // and write separate files); ctx.writeParts selects one of them (regen --parts).
         const parts = ctx.writeParts ?? ["pages", "synopsis"];
-        const results = await Promise.all([parts.includes("pages") ? writePages(ctx) : null, parts.includes("synopsis") ? writeSynopsis(ctx) : null]);
+        // A14: wait for both before failing, so a retry of this stage never overlaps a still-running half
+        const settled = await Promise.allSettled([parts.includes("pages") ? writePages(ctx) : null, parts.includes("synopsis") ? writeSynopsis(ctx) : null]);
+        const failedHalf = settled.find((x): x is PromiseRejectedResult => x.status === "rejected");
+        if (failedHalf) throw failedHalf.reason;
+        const results = settled.map((x) => (x as PromiseFulfilledResult<StageResult | null>).value);
         const done = results.filter((x): x is StageResult => !!x);
         const r: StageResult = { outputs: done.flatMap((x) => x.outputs), metrics: Object.assign({}, ...done.map((x) => x.metrics)), warnings: done.flatMap((x) => x.warnings) };
         try {

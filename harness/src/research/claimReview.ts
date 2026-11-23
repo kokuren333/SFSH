@@ -1,4 +1,5 @@
 import { isoLocal } from "../model/callLog.ts";
+import { stageWidth } from "../util/parallel.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
 import { COPIED_TEXT_REDACTED, VERBATIM_RUN, sourceWindows } from "./claims.ts";
 import type { Claim, ClaimAction, ClaimFinding, ClaimReviewEntry, MissingAspect } from "./claimTypes.ts";
@@ -28,6 +29,12 @@ export const CONTEXT_PAD = 150;
 export const REVIEW_TIMEOUT_MS = 600_000;
 /** AMENDMENT 12: batches of one round run in parallel (the model calls overlap; applying answers stays sequential). */
 export const REVIEW_CONCURRENCY = 3;
+/** AMENDMENT 14: smallest review batch when the batch size shrinks to fill the width (parallel.json stages.claim_review). */
+export const CLAIM_REVIEW_MIN_BATCH = 40;
+/** Batch size of one round: ≤ REVIEW_BATCH, ≥ CLAIM_REVIEW_MIN_BATCH, small enough that the round fills `width` calls. */
+export function reviewBatchSize(n: number, width: number): number {
+  return Math.min(REVIEW_BATCH, Math.max(CLAIM_REVIEW_MIN_BATCH, Math.ceil(n / Math.max(1, width))));
+}
 
 export interface ReviewClaimsOptions {
   maxRounds?: number;
@@ -134,10 +141,13 @@ export async function reviewClaims(ctx: StageContext, opts: ReviewClaimsOptions 
     rounds = round;
     const last = round === maxRounds;
     const next: Claim[] = [];
-    const batchIdx = Array.from({ length: Math.ceil(targets.length / REVIEW_BATCH) }, (_, i) => i);
+    // AMENDMENT 14: the batches of one round fill the configured width (rounds stay sequential)
+    const width = stageWidth("claim_review");
+    const size = reviewBatchSize(targets.length, width);
+    const batchIdx = Array.from({ length: Math.ceil(targets.length / size) }, (_, i) => i);
     const roundTargets = targets;
-    await pool(batchIdx, REVIEW_CONCURRENCY, async (b) => {
-      const batch = roundTargets.slice(b * REVIEW_BATCH, (b + 1) * REVIEW_BATCH);
+    await pool(batchIdx, width, async (b) => {
+      const batch = roundTargets.slice(b * size, (b + 1) * size);
       const batchIds = new Set(batch.map((c) => c.claim_id));
       const ctxById = new Map(batch.map((c) => [c.claim_id, contextFor(c)]));
       const covered: Record<string, number> = {};

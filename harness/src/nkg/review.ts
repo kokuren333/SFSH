@@ -224,3 +224,64 @@ export function lastRoundNote(round: number, maxRounds: number): string {
   if (round < maxRounds) return `\n# 往復\n- これは第${round}回の対応です（最大${maxRounds}往復）。対応後にもう一度レビューがあります。\n`;
   return `\n# 往復\n- これは第${round}回で最後の対応です。declined のまま残った指摘の要素は disputed（信頼度1段下げ）になり、copied_phrase の指摘が未解決の要素は削除されます。copied_phrase は必ず自分の言葉で言い換えて revised にしてください。\n`;
 }
+
+// ------------------------------------------------------------------ AMENDMENT 14: partitioned rounds (S3 write / synopsis)
+/**
+ * Build the review / revise callbacks of runReviewLoop so that, inside one round, the units are reviewed and revised
+ * per partition in parallel (≤ width calls); the rounds themselves stay sequential (runReviewLoop). Findings are routed
+ * to the partition owning the target (else to the partition whose review raised them); a partition call may only
+ * remove its own units; revisions are applied in the fixed partition order (deterministic).
+ */
+export function partitionedRound<U extends { id: string }>(o: {
+  partOf: (u: U) => string;
+  width: number;
+  pool: <T, R>(xs: readonly T[], limit: number, fn: (x: T, i: number) => Promise<R>) => Promise<R[]>;
+  review: (units: U[], others: U[], round: number, prior: ReviewRound[]) => Promise<RawFinding[]>;
+  revise: (units: U[], findings: Finding[], round: number) => Promise<{ output: unknown; responses: FindingResponse[] }>;
+  apply: (state: U[], output: unknown) => U[];
+}): { review: (s: U[], round: number, prior: ReviewRound[]) => Promise<RawFinding[]>; revise: (s: U[], f: Finding[], round: number) => Promise<{ state: U[]; responses: FindingResponse[] }> } {
+  const originOf = new Map<string, string>();
+  const parts = (s: U[]) => [...new Set(s.map(o.partOf))];
+  const routeOf = (s: U[], f: { finding_id: string; target_id: string }) => {
+    const u = s.find((x) => x.id === f.target_id);
+    return u ? o.partOf(u) : originOf.get(f.finding_id) ?? parts(s)[0] ?? "";
+  };
+  return {
+    review: async (state, round, prior) => {
+      if (!state.length) return [];
+      const ps = parts(state);
+      const per = await o.pool(ps, o.width, (p) => {
+        const priorMine = prior.map((r) => ({ ...r, findings: r.findings.filter((f) => routeOf(state, f) === p) })).filter((r) => r.findings.length);
+        return o.review(state.filter((u) => o.partOf(u) === p), state.filter((u) => o.partOf(u) !== p), round, priorMine);
+      });
+      const all: RawFinding[] = [];
+      ps.forEach((p, i) => {
+        for (const f of per[i] ?? []) {
+          all.push(f);
+          originOf.set(`r${round}f${String(all.length).padStart(2, "0")}`, p);
+        }
+      });
+      return all;
+    },
+    revise: async (state, findings, round) => {
+      const byPart = new Map<string, Finding[]>();
+      for (const f of findings) {
+        const p = routeOf(state, f);
+        byPart.set(p, [...(byPart.get(p) ?? []), f]);
+      }
+      const ps = parts(state).filter((p) => byPart.has(p));
+      for (const p of byPart.keys()) if (!ps.includes(p)) ps.push(p);
+      const outs = await o.pool(ps, o.width, (p) => o.revise(state.filter((u) => o.partOf(u) === p), byPart.get(p)!, round));
+      let next = state;
+      const responses: FindingResponse[] = [];
+      ps.forEach((p, i) => {
+        const out = (outs[i]?.output ?? {}) as { removed_ids?: unknown[] };
+        const own = new Set(next.filter((u) => o.partOf(u) === p).map((u) => u.id));
+        const removed = Array.isArray(out.removed_ids) ? out.removed_ids.filter((x) => own.has(String(x))) : [];
+        next = o.apply(next, { ...out, removed_ids: removed });
+        responses.push(...(outs[i]?.responses ?? []));
+      });
+      return { state: next, responses };
+    },
+  };
+}

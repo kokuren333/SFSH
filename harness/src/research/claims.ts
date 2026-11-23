@@ -1,4 +1,5 @@
 import type { StageContext, StageResult } from "../job/context.ts";
+import { stageWidth } from "../util/parallel.ts";
 import { claimIdFor, isClaimAspect, nextClaimNumber, type Claim, type ClaimDropReason, type Epistemic, type PhaseHint, type Spoiler } from "./claimTypes.ts";
 import { buildClaimsPrompt, buildRephrasePrompt, CLAIM_TEXT_TARGET, CLAIMS_SCHEMA, EVIDENCE_QUOTE_MAX, MAX_CLAIMS_PER_PLOT_SOURCE, MAX_CLAIMS_PER_SOURCE, REPHRASE_SCHEMA, type ClaimSourceInput } from "./prompts/claims.ts";
 import { RESEARCH_FILES, readClaims, readRawText, readSources, writeClaims, writeSources } from "./researchIo.ts";
@@ -25,6 +26,7 @@ export const CLAIMS_TIMEOUT_MS = 600_000;
 /** AMENDMENT 12: chars of a plot-frame source passed to Luna (episode guides are long). [暫定] */
 export const PLOT_SOURCE_CHARS_PER_CALL = 16_000;
 /** AMENDMENT 12: parallel Luna extraction calls per stage (speed; the 30-minute wall clock covers research). [暫定] */
+/** AMENDMENT 14: the width is harness/config/parallel.json stages.claims (default 6); kept as the A12 value for reference. */
 export const CLAIMS_CONCURRENCY = 3;
 /** Text stored for claims dropped as copied_phrase (the copied wording is never persisted). */
 export const COPIED_TEXT_REDACTED = "（出典文の写しのため削除）";
@@ -139,7 +141,7 @@ export async function extractClaims(ctx: StageContext, opts: ExtractClaimsOption
     ...batchByChars(inputs, BATCH_CHARS).map((items) => ({ plot: false, items })),
   ];
   let failedBatches = 0;
-  const outs = await pool(batches, CLAIMS_CONCURRENCY, async (batch) => {
+  const outs = await pool(batches, stageWidth("claims"), async (batch) => {
     try {
       const res = await ctx.luna.call({
         task: batch.plot ? "s1.claims.plot" : "s1.claims",

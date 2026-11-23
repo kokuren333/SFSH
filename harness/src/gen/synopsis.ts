@@ -18,7 +18,7 @@
 import type { PlotNode, PublicWork } from "../../../site/src/public-types.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
 import { readActiveClaims, readJson, writeJson } from "../nkg/io.ts";
-import { FINDINGS_SCHEMA, REVIEW_MAX_ROUNDS, advisoryFrom, completedResponses, copiedPhraseTargets, runReviewLoop, type FindingResponse, type RawFinding } from "../nkg/review.ts";
+import { FINDINGS_SCHEMA, REVIEW_MAX_ROUNDS, advisoryFrom, completedResponses, copiedPhraseTargets, partitionedRound, runReviewLoop, type FindingResponse, type RawFinding } from "../nkg/review.ts";
 import type { Epistemic, ReviewState } from "../nkg/types.ts";
 import type { Claim } from "../research/claimTypes.ts";
 import { GEN_FILES, maxSpoiler } from "./io.ts";
@@ -40,6 +40,8 @@ import {
   type SynopsisPlanChapter,
 } from "./synopsisPrompts.ts";
 import { S3_TIMEOUT_MS } from "./tags.ts";
+import { stageWidth } from "../util/parallel.ts";
+import { pool } from "../util/pool.ts";
 import {
   applyVerbatimGuard,
   applyWriteRevision,
@@ -59,7 +61,7 @@ import {
 } from "./write.ts";
 
 /** Parallel chapter calls per work (3 works run in parallel → at most 3× this many CLI processes). */
-export const CHAPTER_CONCURRENCY = 6;
+export const CHAPTER_CONCURRENCY = 6; // A14: the width is parallel.json stages.synopsis (default 6)
 /** Claim aspects that are not story facts (bibliographic data, titles, genre labels, reception). */
 const NON_STORY_ASPECTS = new Set(["bibliographic", "title", "genre", "M12"]);
 
@@ -234,19 +236,6 @@ export interface SynopsisReport {
   warnings: string[];
 }
 
-async function pool<T, R>(xs: T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(xs.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < xs.length) {
-      const i = next++;
-      out[i] = await fn(xs[i]!, i);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, xs.length) }, worker));
-  return out;
-}
-
 export async function writeSynopsis(ctx: StageContext): Promise<StageResult> {
   const pw = readJson<PublicWork | null>(ctx.workDir, GEN_FILES.projection, null);
   if (!pw) throw new Error(`S3 synopsis: ${GEN_FILES.projection} missing — run projectPublic first`);
@@ -268,7 +257,7 @@ export async function writeSynopsis(ctx: StageContext): Promise<StageResult> {
 
   // 2) chapters in parallel
   const introText = plan.intro?.paragraphs.join("\n") ?? "";
-  const chapterOuts = await pool(plan.chapters, CHAPTER_CONCURRENCY, async (_c, k) => {
+  const chapterOuts = await pool(plan.chapters, stageWidth("synopsis"), async (_c, k) => { // A14: parallel.json stages.synopsis
     const introducedBefore = plan.chapters.slice(0, k).flatMap((c) => c.introduces);
     try {
       const r = await ctx.haiku.call({
@@ -321,35 +310,44 @@ export async function writeSynopsis(ctx: StageContext): Promise<StageResult> {
 
   // 3) Luna review (findings only), Haiku revises — max 2 rounds
   const removedByAuthor: string[] = [];
+  // AMENDMENT 14: inside one round the review and the revision run per run of consecutive chapters in parallel
+  // (≤ parallel.json stages.synopsis partitions; the intro goes with the first chapters); the rounds stay sequential.
+  const synWidth = stageWidth("synopsis");
+  const nParts = Math.max(1, Math.min(synWidth, plan.chapters.length + 1));
+  const chapterNo = (id: string) => Number(id.match(/^syn_c(\d+)_/)?.[1] ?? 0);
   const outcome = await runReviewLoop<Unit[]>({
     initial: written,
     maxRounds: REVIEW_MAX_ROUNDS,
     ids: (s) => s.map((u) => u.id),
-    review: async (state, round, prior) => {
-      if (!state.length) return [];
-      const r = await ctx.luna.call({
-        task: "s3.synopsis.review",
-        prompt: synopsisReviewPrompt({ title, units: state.map(viewOf), material, claims, prior, round, maxRounds: REVIEW_MAX_ROUNDS }),
-        schema: FINDINGS_SCHEMA,
-        tools: "none",
-        jobId: ctx.jobId,
-        timeoutMs: S3_TIMEOUT_MS,
-      });
-      calls++;
-      return ((r.output as { findings?: RawFinding[] }).findings ?? []) as RawFinding[];
-    },
-    revise: async (state, findings, round) => {
-      const r = await ctx.haiku.call({
-        task: "s3.synopsis.revise",
-        prompt: synopsisRevisePrompt({ title, units: state.map(viewOf), findings, material, round, maxRounds: REVIEW_MAX_ROUNDS }),
-        schema: WRITE_REVISION_SCHEMA,
-        jobId: ctx.jobId,
-        timeoutMs: S3_TIMEOUT_MS,
-      });
-      calls++;
-      const out = r.output as { responses?: FindingResponse[] };
-      return { state: applyWriteRevision(state, r.output, removedByAuthor), responses: out.responses ?? [] };
-    },
+    ...partitionedRound<Unit>({
+      partOf: (u) => `p${Math.floor((chapterNo(u.id) * nParts) / (plan.chapters.length + 1))}`,
+      width: synWidth,
+      pool,
+      review: async (units, _others, round, prior) => {
+        const r = await ctx.luna.call({
+          task: "s3.synopsis.review",
+          prompt: synopsisReviewPrompt({ title, units: units.map(viewOf), material, claims, prior, round, maxRounds: REVIEW_MAX_ROUNDS }),
+          schema: FINDINGS_SCHEMA,
+          tools: "none",
+          jobId: ctx.jobId,
+          timeoutMs: S3_TIMEOUT_MS,
+        });
+        calls++;
+        return ((r.output as { findings?: RawFinding[] }).findings ?? []) as RawFinding[];
+      },
+      revise: async (units, findings, round) => {
+        const r = await ctx.haiku.call({
+          task: "s3.synopsis.revise",
+          prompt: synopsisRevisePrompt({ title, units: units.map(viewOf), findings, material, round, maxRounds: REVIEW_MAX_ROUNDS }),
+          schema: WRITE_REVISION_SCHEMA,
+          jobId: ctx.jobId,
+          timeoutMs: S3_TIMEOUT_MS,
+        });
+        calls++;
+        return { output: r.output, responses: (r.output as { responses?: FindingResponse[] }).responses ?? [] };
+      },
+      apply: (state, out) => applyWriteRevision(state, out, removedByAuthor),
+    }),
   });
   const unresolved = unresolvedOf(outcome);
   const deleted = copiedPhraseTargets(unresolved).filter((id) => outcome.state.some((u) => u.id === id));

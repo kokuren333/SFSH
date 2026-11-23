@@ -124,17 +124,24 @@ test("full chain selectModules → phases → fact → interp → assemble produ
     const calls: FakeCall[] = [];
     const logs: string[] = [];
     // WP-2.1: two rounds; the second (fresh) review of each layer finds nothing → early stop
-    const reviewed = new Set<string>();
+    // A14: review / revise run per call group inside a round; round 2 starts after the round-1 revisions
+    const revised = new Set<string>();
+    let round2WithPrior = 0;
     const handler = (req: Parameters<typeof cannedS2>[0]) => {
-      if (/^s2\.(fact|interp)\.review$/.test(req.task)) {
-        if (reviewed.has(req.task)) {
+      const layer = /^s2\.(fact|interp)\.(review|revise)$/.exec(req.task);
+      if (layer?.[2] === "review" && revised.has(layer[1]!)) {
+        if (/前回までの指摘/.test(req.prompt)) {
           assert.match(req.prompt, /前回までの指摘と作成側の回答（今回は第2回レビューで、これが最後）/);
-          assert.match(req.prompt, /r1f01/);
-          return { findings: [] };
+          assert.match(req.prompt, /r1f0\d/);
+          round2WithPrior++;
         }
-        reviewed.add(req.task);
+        return { findings: [] };
       }
-      if (/^s2\.(fact|interp)\.revise$/.test(req.task)) assert.match(req.prompt, /これは第1回の対応です（最大2往復）/);
+      if (layer?.[2] === "revise") {
+        assert.match(req.prompt, /これは第1回の対応です（最大2往復）/);
+        assert.match(req.prompt, /参照できる他の要素/);
+        revised.add(layer[1]!);
+      }
       return cannedS2(req);
     };
     const ctx = fixtureContext(dir, fakePort("luna", handler, calls), fakePort("haiku", handler, calls), logs);
@@ -158,8 +165,17 @@ test("full chain selectModules → phases → fact → interp → assemble produ
     const asm = await assembleNkg(ctx);
 
     // call order & ports: events before people before world; authors/reviewers opposite
+    assert.ok(round2WithPrior >= 2, "round-2 reviews of groups with round-1 findings see them");
+    const seq = calls.map((c) => `${c.port}:${c.req.task}`);
+    // fact: events / people / world reviewed in parallel (3), revised where findings are (events, people);
+    // interp: 4 groups reviewed, themes_emotion revised
+    assert.equal(seq.filter((x) => x === "haiku:s2.fact.review").length, 6);
+    assert.equal(seq.filter((x) => x === "luna:s2.fact.revise").length, 2);
+    assert.equal(seq.filter((x) => x === "luna:s2.interp.review").length, 8);
+    assert.equal(seq.filter((x) => x === "haiku:s2.interp.revise").length, 1);
+    const collapse = (xs: string[]) => xs.filter((x, i) => !(x === xs[i - 1] && /review|revise/.test(x)));
     assert.deepEqual(
-      calls.map((c) => `${c.port}:${c.req.task}`),
+      collapse(seq),
       [
         "luna:s2.genre",
         "haiku:s2.modules.review",

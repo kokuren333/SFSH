@@ -1,0 +1,13 @@
+{
+  "global_model_calls": 6,
+  "stage_width_default": 6,
+  "stages": {
+    "claims": 6,
+    "claim_review": 6,
+    "search": 6,
+    "nkg_author": 6,
+    "nkg_review": 6,
+    "write": 6,
+    "synopsis": 6
+  }
+}

@@ -671,14 +671,14 @@ test("reviewClaims: round 2 re-raise answered with revise resolves; copied_phras
   assert.deepEqual(log[1].advisory.map((a) => `${a.target_id}:${a.type}@${a.round}`), ["c0006:misclassified@1"]);
 });
 
-test("reviewClaims: batches of 120 claims per Haiku call", async () => {
+test("reviewClaims: batches fill the configured width (A14: 250 claims, width 6 → 6 batches of ≤42)", async () => {
   const { ctx, workDir, haiku } = makeCtx({ haiku: () => ({ output: { findings: [] } }) });
   const card = seedSource(workDir, "https://a.example/p1", SRC_TEXT);
   writeClaims(workDir, Array.from({ length: 250 }, (_, i) => mkClaim(`c${String(i + 1).padStart(4, "0")}`, card.source_id)));
   const r = await reviewClaims(ctx);
-  assert.equal(haiku.calls.length, 3);
+  assert.equal(haiku.calls.length, 6);
   assert.equal(r.metrics.agreed, 250);
-  assert.equal(readClaimsReview(workDir).length, 3);
+  assert.equal(readClaimsReview(workDir).length, 6);
 });
 
 // ---------- follow-up ----------
