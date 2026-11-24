@@ -268,7 +268,7 @@ export function buildNkgSchema(): Json {
       additionalProperties: false,
       required: ["unit", "from", "to", "label"],
       properties: {
-        unit: { enum: ["volume", "episode", "arc", "season", "whole"] },
+        unit: { enum: ["volume", "episode", "arc", "season", "whole", "film", "installment"] },
         from: { type: ["integer", "null"] },
         to: { type: ["integer", "null"] },
         label: str(),
