@@ -90,12 +90,13 @@ export interface ExtractOutput {
   candidates: ExtractedCandidate[];
 }
 
-export function buildSearchPrompt(workQuery: string, mediumHint: string | null, maxSearches: number, maxSelections: number): string {
+export function buildSearchPrompt(workQuery: string, mediumHint: string | null, maxSearches: number, maxSelections: number, installment: number | null = null): string {
   return [
     "あなたは作品同定のための調査員です。入力された作品名は検索語であり、正式名称とは限りません（略称・通称・打ち間違いの可能性があります）。",
     "",
     `入力: ${JSON.stringify(workQuery)}`,
     `媒体の手がかり: ${mediumHint ?? "なし"}`,
+    ...(installment != null ? [`対象: シリーズの第${installment}作目に当たる個別作品（続編）。第1作そのものではなく、第${installment}作目の正式題名・媒体・制作者・初出年が分かるページを探すこと。`] : []),
     "",
     "やること:",
     `1. web_search を最大 ${maxSearches} 回まで使い、この作品の正式な題名・媒体・作者（制作者）・初出年・題名の読みを記載しているページを探す。`,
@@ -117,7 +118,7 @@ export interface ExtractSource {
   text: string;
 }
 
-export function buildExtractPrompt(workQuery: string, mediumHint: string | null, sources: ExtractSource[]): string {
+export function buildExtractPrompt(workQuery: string, mediumHint: string | null, sources: ExtractSource[], installment: number | null = null): string {
   const blocks = sources.map((s) =>
     [`=== source_id: ${s.source_id} | tier: ${s.tier} | site: ${s.site_key} | title: ${s.title} | url: ${s.url}`, s.text, "=== end"].join("\n"),
   );
@@ -128,6 +129,7 @@ export function buildExtractPrompt(workQuery: string, mediumHint: string | null,
     "",
     `入力（検索語。正式名称とは限らない）: ${JSON.stringify(workQuery)}`,
     `媒体の手がかり: ${mediumHint ?? "なし"}`,
+    ...(installment != null ? [`対象: シリーズの第${installment}作目に当たる個別作品（続編）。候補はその作品だけにし、第1作やシリーズ全体は候補にしない。`] : []),
     "",
     "正式名称（title）の決め方:",
     "- T1 出典（公式・出版社・書誌DB）が表記している題名を、その表記のまま使う（記号・全角半角も本文どおり）。T1 が無ければ他の出典の表記。",

@@ -35,7 +35,7 @@ export interface ReviewItem {
   context: string;
 }
 
-export function buildReviewPrompt(workTitle: string, items: ReviewItem[], coveredAspects: Record<string, number>): string {
+export function buildReviewPrompt(workTitle: string, items: ReviewItem[], coveredAspects: Record<string, number>, scope?: string | null): string {
   const lines: string[] = [];
   lines.push(`あなたは物語作品『${workTitle}』の調査結果のレビュー担当です。各 claim を、添えた出典本文の周辺と突き合わせて問題を指摘してください。書き換えはしません。指摘だけを返します。`);
   lines.push("");
@@ -50,6 +50,10 @@ export function buildReviewPrompt(workTitle: string, items: ReviewItem[], covere
   lines.push("- 問題のない claim には何も返さない。findings が空でもよい。");
   lines.push("- evidence にはなぜそう判断したかを自分の言葉で短く書く（出典の文を長く写さない）。");
   lines.push(`- 作成側への原則: ${OWN_WORDS_RULE}。`);
+  if (scope) {
+    lines.push("- 対象範囲が指定されている。範囲外の出来事・設定・人物変化・結末についての claim は overreach として指摘する（evidence に「対象範囲外」と明記する）。");
+    lines.push(`- 対象範囲: ${scope}`);
+  }
   lines.push("");
   lines.push("観点 ID:");
   lines.push(ASPECT_GUIDE);

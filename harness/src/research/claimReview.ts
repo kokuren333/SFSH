@@ -4,6 +4,7 @@ import type { StageContext, StageResult } from "../job/context.ts";
 import { COPIED_TEXT_REDACTED, VERBATIM_RUN, sourceWindows } from "./claims.ts";
 import type { Claim, ClaimAction, ClaimFinding, ClaimReviewEntry, MissingAspect } from "./claimTypes.ts";
 import { buildReviewPrompt, buildRevisePrompt, REVIEW_SCHEMA, REVISE_SCHEMA, type ReviewItem, type ReviseItem } from "./prompts/claimReview.ts";
+import { scopeText } from "./prompts/common.ts";
 import { appendClaimsReview, RESEARCH_FILES, readClaims, readRawText, readSources, writeClaims } from "./researchIo.ts";
 import { hasVerbatimRun, normalizeForMatch, type NormalizedText } from "./textMatch.ts";
 import { REVIEW_MAX_ROUNDS } from "../nkg/review.ts";
@@ -164,7 +165,7 @@ export async function reviewClaims(ctx: StageContext, opts: ReviewClaimsOptions 
       const hres = await ctx.haiku.call({
         task: "s1.claims.review",
         prompt:
-          buildReviewPrompt(workTitle, items, covered) +
+          buildReviewPrompt(workTitle, items, covered, scopeText(ctx.range)) +
           priorClaimBlock(
             batch.map((c) => ({ claim_id: c.claim_id, history: history.get(c.claim_id) ?? [] })),
             round,

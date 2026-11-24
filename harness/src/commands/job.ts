@@ -18,7 +18,7 @@ export async function jobCommand(args: string[]): Promise<number> {
   if (sub === "resume") return jobResume(rest);
   if (sub === "status") return jobStatus(rest);
   if (sub === "rework") return jobRework(rest);
-  console.error('usage: sfsh job run --work "<title>" [--medium m] [--range r] [--url u]... [--job-id id] | job resume <job_id> [--from <stage>] [--until <stage>] | job status <job_id> [--json] | job rework <work_id> [--until <stage>] [--create-only]');
+  console.error('usage: sfsh job run --work "<title>" [--medium m] [--range r] [--url u]... [--job-id id] | job resume <job_id> [--from <stage>] [--until <stage>] | job status <job_id> [--json] | job rework <work_id> [--range <範囲>] [--until <stage>] [--create-only]');
   return 2;
 }
 
@@ -114,7 +114,7 @@ async function jobResume(args: string[]): Promise<number> {
 }
 
 /**
- * AMENDMENT 12: `sfsh job rework <work_id> [--until <stage>] [--create-only]` — research an existing work again from
+ * AMENDMENT 12: `sfsh job rework <work_id> [--range <範囲>] [--until <stage>] [--create-only]` — research an existing work again from
  * scratch with the current research stage. The work's research/ and nkg/ are moved (gen/ is copied) to
  * works/<id>/_rework-backup-<time>/ (local rollback, git-ignored), then a new job is created with the identification
  * done (the work id is already canonical) and its own budget (§1.3 limits unchanged). Run / resume it like any job.
@@ -122,7 +122,7 @@ async function jobResume(args: string[]): Promise<number> {
 async function jobRework(args: string[]): Promise<number> {
   const workId = args[0];
   if (!workId || workId.startsWith("--")) {
-    console.error("usage: sfsh job rework <work_id> [--until <stage>] [--create-only]");
+    console.error("usage: sfsh job rework <work_id> [--range <範囲>] [--until <stage>] [--create-only]");
     return 2;
   }
   const workDir = path.join(paths.works, workId);
@@ -132,6 +132,9 @@ async function jobRework(args: string[]): Promise<number> {
   }
   const ui = args.indexOf("--until");
   const until = ui >= 0 && (STAGES as readonly string[]).includes(args[ui + 1] ?? "") ? (args[ui + 1] as StageName) : undefined;
+  // AMENDMENT 16: a rework may carry a range (before A16 it was hardcoded to 全体, dropping the original job's range).
+  const ri = args.indexOf("--range");
+  const rangeRaw = ri >= 0 && args[ri + 1] && !args[ri + 1]!.startsWith("--") ? args[ri + 1]! : "全体";
   const now = new Date();
   const stamp = isoLocal(now).slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
   const backup = path.join(workDir, `_rework-backup-${stamp}`);
@@ -148,7 +151,7 @@ async function jobRework(args: string[]): Promise<number> {
     fs.cpSync(path.join(workDir, "gen"), path.join(backup, "gen"), { recursive: true, filter: (src) => !path.basename(src).startsWith("_backup-") });
   const w = readWork(workDir);
   const id = nextJobId(paths.jobLogDir, now);
-  const st = newJobState({ jobId: id, workQuery: w.title, mediumHint: w.medium ?? null, rangeRaw: "全体" }, now);
+  const st = newJobState({ jobId: id, workQuery: w.title, mediumHint: w.medium ?? null, rangeRaw }, now);
   st.work_id = workId;
   st.resolved = { work_id: workId, method: "rework", title: w.title, backup: path.relative(workDir, backup) };
   Object.assign(st.stages.identify, { status: "done", attempts: 0, started_at: isoLocal(now), finished_at: isoLocal(now), duration_ms: 0, metrics: { method: "rework", searches_used: 0, fetches_used: 0 } });

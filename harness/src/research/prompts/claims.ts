@@ -52,12 +52,20 @@ export interface ClaimsPromptOptions {
   plot?: boolean;
   /** AMENDMENT 12 targeted follow-up: what this extraction should look for first (coverage shortfalls). */
   focus?: string[];
+  /** AMENDMENT 16: scope instruction from the job range (null = whole work). Out-of-range facts are not extracted. */
+  scope?: string | null;
 }
 
 export function buildClaimsPrompt(workTitle: string, sources: ClaimSourceInput[], o: ClaimsPromptOptions = {}): string {
   const lines: string[] = [];
   lines.push(`あなたは物語作品『${workTitle}』の調査担当です。下の出典本文から、作品についての主張（claim）を取り出してください。`);
   lines.push("");
+  if (o.scope) {
+    lines.push("## 対象範囲（厳守）");
+    lines.push(o.scope);
+    lines.push("- 範囲外の出来事・設定・人物変化・結末は、出典に書かれていても claim にしない。");
+    lines.push("");
+  }
   if (o.plot) {
     lines.push("## この出典は「粗筋枠」です（あらすじ・各話/各章ガイド・作品データベース）");
     lines.push("- 物語の出来事を、作中の時系列に沿って、1件に1つの出来事として取り出す。誰が・何をして・その結果どうなったか（次の出来事へのつながり）が分かるように書く。");

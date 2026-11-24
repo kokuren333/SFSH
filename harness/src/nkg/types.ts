@@ -207,7 +207,7 @@ export interface Phase {
 }
 
 export interface CoverageUnit {
-  unit: "volume" | "episode" | "arc" | "season" | "whole";
+  unit: "volume" | "episode" | "arc" | "season" | "whole" | "film" | "installment";
   from: number | null;
   to: number | null;
   label: string;

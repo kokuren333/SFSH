@@ -45,6 +45,8 @@ export interface IdentifyInput {
   /** Input as typed (never rewritten). */
   workQuery: string;
   mediumHint: string | null;
+  /** AMENDMENT 16: 「N作目」 — resolve the Nth series entry as the work (null = the named work itself). */
+  installment?: number | null;
 }
 
 export interface IdentifyDeps {
@@ -102,7 +104,11 @@ export async function identify(input: IdentifyInput, deps: IdentifyDeps): Promis
 
   // a. INDEX match (no model call)
   const index = readIndex(deps.worksDir);
-  let matches = matchIndex(key, index);
+  // AMENDMENT 16: an installment selector (「N作目」) names a different work than the one the query
+  // literally matches — the index shortcut must not resolve it to the base work (job 20261124-0006
+  // resolved 「マトリックス 2作目」 to the first film). Identification research decides instead.
+  let matches = input.installment != null ? [] : matchIndex(key, index);
+  if (input.installment != null) deps.log(`S0: installment ${input.installment} requested — index shortcut skipped`);
   if (hint && matches.length > 0) {
     const byId = new Map(index.works.map((e) => [e.work_id, e]));
     const narrowed = matches.filter((id) => normalizeMediumHint(byId.get(id)?.medium ?? null) === hint);
@@ -193,7 +199,7 @@ async function research(
   } else {
     const res = await luna.call({
       task: "s0.identify.search",
-      prompt: buildSearchPrompt(input.workQuery, input.mediumHint, searchCap, IDENTIFY_BUDGET.fetches),
+      prompt: buildSearchPrompt(input.workQuery, input.mediumHint, searchCap, IDENTIFY_BUDGET.fetches, input.installment ?? null),
       schema: SEARCH_SCHEMA,
       tools: "web_search",
       jobId: input.jobId,
@@ -277,7 +283,7 @@ async function research(
     const t = readRaw(staging, c);
     if (t !== null) loaded.set(c.source_id, loadSource(c, t));
   }
-  const trace: Record<string, unknown> = { job_id: input.jobId, at: at(), work_query: input.workQuery, key, medium_hint: input.mediumHint };
+  const trace: Record<string, unknown> = { job_id: input.jobId, at: at(), work_query: input.workQuery, key, medium_hint: input.mediumHint, installment: input.installment ?? null };
   const traceFile = path.join(researchDir, `identify_${input.jobId}.json`);
 
   let verified: VerifiedCandidate[] = [];
@@ -293,6 +299,7 @@ async function research(
         url: s.card.final_url || s.card.url,
         text: s.text.orig.slice(0, EXTRACT_TEXT_CHARS),
       })),
+      input.installment ?? null,
     );
     const res = await luna.call({ task: "s0.identify.extract", prompt, schema: EXTRACT_SCHEMA, tools: "none", jobId: input.jobId });
     modelCalls++;
@@ -456,7 +463,7 @@ export function finalizeStagedCandidate(
   const trace = readJsonOr<Record<string, unknown> | null>(traceFile, null);
   const metrics: Record<string, number | string> = { method: "research", model_calls: 0, searches_used: 0, fetches_used: 0, picked: args.pick };
   if (!trace) throw new Error(`no staged identification for job ${args.jobId} (${traceFile} missing); answer with a new work name instead`);
-  const input: IdentifyInput = { jobId: args.jobId, workQuery: String(trace.work_query ?? ""), mediumHint: (trace.medium_hint as string | null) ?? null };
+  const input: IdentifyInput = { jobId: args.jobId, workQuery: String(trace.work_query ?? ""), mediumHint: (trace.medium_hint as string | null) ?? null, installment: (trace.installment as number | null) ?? null };
   const key = normalizeQuery(input.workQuery);
   type Traced = ReturnType<typeof traceCandidate>;
   const tracedList: Traced[] =

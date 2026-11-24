@@ -85,6 +85,15 @@ function parseItem(s: string): RangeItem | string {
   if ((m = s.match(new RegExp(`^第?${N}\\s*${SEP}\\s*第?${N}(?:シーズン|期)$`)))) return span("season", num(m[1]), num(m[2]), "");
   if ((m = s.match(new RegExp(`^第?${N}(?:シーズン|期)$`)))) return span("season", num(m[1]), num(m[1]), "");
   if ((m = s.match(new RegExp(`^(?:シーズン|season\\s*)${N}$`, "i")))) return span("season", num(m[1]), num(m[1]), "");
+  // installment: N作目 / 第N作目 (AMENDMENT 16 — a series-entry selector: identification resolves
+  // the Nth entry as the work itself; it is not an intra-work range)
+  if ((m = s.match(new RegExp(`^第?${N}作目$`)))) {
+    const n = num(m[1]);
+    if (n === null) return "数字を読めません";
+    if (n < 1) return "番号は1以上です";
+    if (n > RANGE_MAX_NUMBER) return "番号が大きすぎます";
+    return { unit: "installment", from: n, to: n, label: `${n}作目` };
+  }
   // film: 劇場版 / 劇場版「◯◯」
   if ((m = s.match(/^劇場版\s*(.*)$/))) {
     const name = stripQuotes(m[1] ?? "");
@@ -102,7 +111,7 @@ function parseItem(s: string): RangeItem | string {
     if (!name || /^[\d〇零一二三四五六七八九十百千第全]+$/.test(name) || /[「」『』]/.test(name)) return "編の名前を読めません";
     return { unit: "arc", from: null, to: null, label: `「${name}」編` };
   }
-  return "範囲の書き方を解釈できません（例: 全体／3巻／1-3巻／5話／1-12話／第2シーズン／「◯◯」編／劇場版）";
+  return "範囲の書き方を解釈できません（例: 全体／3巻／1-3巻／5話／1-12話／第2シーズン／「◯◯」編／劇場版／2作目）";
 }
 
 /** Parse a whole range string. Empty / whitespace / null → [全体]. */
@@ -156,7 +165,7 @@ function itemKey(i: RangeItem): string {
   return `${i.unit}:${i.from}-${i.to}`;
 }
 
-const UNIT_ORDER: RangeUnit[] = ["whole", "season", "volume", "episode", "arc", "film"];
+const UNIT_ORDER: RangeUnit[] = ["installment", "whole", "season", "volume", "episode", "arc", "film"];
 
 /** Canonical key of a parsed range (order-independent), used in the idempotency key (§4.4). */
 export function rangeKey(items: RangeItem[] | null | undefined): string {

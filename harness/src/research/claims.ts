@@ -2,6 +2,7 @@ import type { StageContext, StageResult } from "../job/context.ts";
 import { stageWidth } from "../util/parallel.ts";
 import { claimIdFor, isClaimAspect, nextClaimNumber, type Claim, type ClaimDropReason, type Epistemic, type PhaseHint, type Spoiler } from "./claimTypes.ts";
 import { buildClaimsPrompt, buildRephrasePrompt, CLAIM_TEXT_TARGET, CLAIMS_SCHEMA, EVIDENCE_QUOTE_MAX, MAX_CLAIMS_PER_PLOT_SOURCE, MAX_CLAIMS_PER_SOURCE, REPHRASE_SCHEMA, type ClaimSourceInput } from "./prompts/claims.ts";
+import { scopeText } from "./prompts/common.ts";
 import { RESEARCH_FILES, readClaims, readRawText, readSources, writeClaims, writeSources } from "./researchIo.ts";
 import { sourceIdsForAspect } from "./frames.ts";
 import { pool } from "../util/pool.ts";
@@ -145,7 +146,7 @@ export async function extractClaims(ctx: StageContext, opts: ExtractClaimsOption
     try {
       const res = await ctx.luna.call({
         task: batch.plot ? "s1.claims.plot" : "s1.claims",
-        prompt: buildClaimsPrompt(workTitle, batch.items, { plot: batch.plot, focus: opts.focus }),
+        prompt: buildClaimsPrompt(workTitle, batch.items, { plot: batch.plot, focus: opts.focus, scope: scopeText(ctx.range) }),
         schema: CLAIMS_SCHEMA,
         tools: "none",
         jobId: ctx.jobId,

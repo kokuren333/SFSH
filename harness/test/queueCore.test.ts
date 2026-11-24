@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { formatRange, kanjiToNumber, parseRange, rangeKey } from "../src/queue/range.ts";
+import { scopeText } from "../src/research/prompts/common.ts";
 import { adoptInboxDrops, buildJobRequest, comparableRequest, submitJob, validateJobInput } from "../src/queue/request.ts";
 import { allocateJobId, ensureQueueDirs, findJob, listJobs, reconcileDirs, saveJob, type QueueEnv } from "../src/queue/store.ts";
 import { emitNotice, listNotices, listPendingNotices, markNoticeSent } from "../src/queue/notify.ts";
@@ -161,4 +162,27 @@ test("outbox: a notice id is written once, even after it was sent", (t) => {
   assert.equal(all.length, 1);
   assert.equal(all[0].sent_via, "test");
   assert.throws(() => emitNotice(e, { ...n, id: "../x" }));
+});
+
+test("range grammar (A16): N作目 parses as an installment selector", () => {
+  const one = (s: string) => {
+    const r = parseRange(s);
+    assert.ok(r.ok, `${s}: ${!r.ok ? r.reason : ""}`);
+    return r.items;
+  };
+  assert.deepEqual(one("2作目"), [{ unit: "installment", from: 2, to: 2, label: "2作目" }]);
+  assert.deepEqual(one("第3作目"), [{ unit: "installment", from: 3, to: 3, label: "3作目" }]);
+  assert.deepEqual(one("二作目"), [{ unit: "installment", from: 2, to: 2, label: "2作目" }]);
+  assert.equal(rangeKey(one("2作目")), "installment:2-2");
+  assert.equal(formatRange(one("2作目")), "2作目");
+});
+
+test("scopeText (A16): a partial range becomes a scope instruction; whole / installment do not", () => {
+  assert.equal(scopeText([{ unit: "whole", from: null, to: null, label: "全体" }]), null);
+  assert.equal(scopeText([{ unit: "installment", from: 2, to: 2, label: "2作目" }]), null);
+  assert.equal(scopeText(null), null);
+  const arc = scopeText([{ unit: "arc", from: null, to: null, label: "「ハンター試験」編" }]);
+  assert.ok(arc && arc.includes("「ハンター試験」編") && arc.includes("対象外"));
+  const vol = scopeText([{ unit: "volume", from: 1, to: 3, label: "1-3巻" }]);
+  assert.ok(vol && vol.includes("1-3巻"));
 });

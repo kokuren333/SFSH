@@ -28,10 +28,40 @@ export interface WorkBrief {
   creators: string[];
   medium: string;
   first_release: string | null;
+  /** AMENDMENT 16: scope instruction built from the job range (null = the whole work). */
+  scope?: string | null;
+}
+
+/** Structural minimum of a range item (avoids an import cycle with job/context.ts). */
+export interface RangeLike {
+  unit: string;
+  from: number | null;
+  to: number | null;
+  label: string;
+}
+
+/**
+ * AMENDMENT 16: the job range as an instruction for search / extraction prompts.
+ * Returns null when the range covers the whole work (unit whole only, or an installment selector —
+ * an installment picks the work itself at identification, so research then covers that work wholly).
+ * Before A16 the range was parsed and stored but no stage prompt ever read it, so a ranged job
+ * silently researched the whole work (HUNTER×HUNTER "ハンター試験編", job 20261124-0003).
+ */
+export function scopeText(range: readonly RangeLike[] | null | undefined): string | null {
+  const items = (range ?? []).filter((i) => i.unit !== "whole" && i.unit !== "installment");
+  if (items.length === 0) return null;
+  const labels = items.map((i) => i.label).join("・");
+  const lines = [
+    `指定範囲「${labels}」のみが対象。それ以外の部分（範囲の前後の展開、他の編・巻・話・シーズン、続編・後日談、範囲外で判明する設定・人物の最終的な変化・作品全体の結末）は対象外であり、検索・抽出・記述のいずれにも含めない。`,
+  ];
+  if (items.some((i) => i.unit === "arc")) lines.push("編の範囲は、その編の発端から決着までとし、作品全体の結末と混同しない。範囲の終端はその編の決着である。");
+  if (items.some((i) => i.unit === "volume" || i.unit === "episode" || i.unit === "season")) lines.push("範囲の境界（巻数・話数・シーズン）が曖昧な情報は、範囲内と確認できるものだけを対象にする。");
+  return lines.join("\n");
 }
 
 export function workLine(w: WorkBrief): string {
   const parts = [`題名: ${w.title}`, `作者/製作: ${w.creators.join("、") || "不明"}`, `媒体: ${w.medium}`];
   if (w.first_release) parts.push(`初出: ${w.first_release}`);
-  return parts.join(" / ");
+  const line = parts.join(" / ");
+  return w.scope ? `${line}\n対象範囲: ${w.scope}` : line;
 }

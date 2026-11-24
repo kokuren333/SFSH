@@ -63,7 +63,7 @@ export function clarifyText(job: JobRequest, info: Omit<ClarifyInfo, "message">,
       : `sfsh answer ${job.job_id} --pick <番号> | --work <作品名> | --medium <媒体> | --range <範囲>`;
   switch (info.reason) {
     case "range_unparsed":
-      return `聞き返し: ${job.job_id}「${job.work_query}」の範囲「${job.range_raw}」を解釈できません${rangeReason ? `（${rangeReason}）` : ""}。範囲（例: 全体／3巻／1-3巻／5話／第2シーズン／「◯◯」編／劇場版）を答えてください。回答: ${
+      return `聞き返し: ${job.job_id}「${job.work_query}」の範囲「${job.range_raw}」を解釈できません${rangeReason ? `（${rangeReason}）` : ""}。範囲（例: 全体／3巻／1-3巻／5話／第2シーズン／「◯◯」編／劇場版／2作目）を答えてください。回答: ${
         job.origin === "discord" ? `/sfsh answer job_id:${job.job_id} range:<範囲>` : `sfsh answer ${job.job_id} --range <範囲>`
       }`;
     case "no_candidates":

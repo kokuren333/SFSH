@@ -11,6 +11,7 @@ import { allowance, FRAMES, type FramePlan } from "../research/frames.ts";
 import { runPlotSearch } from "../research/plotSearch.ts";
 import { coverageFollowUp, gapFill, refact } from "../research/targeted.ts";
 import { identify } from "../research/identify/index.ts";
+import { scopeText } from "../research/prompts/common.ts";
 import { readClaims, readGaps, readSources, readFetchLog, writeBudget } from "../research/researchIo.ts";
 import { assertCardsTraceable, runSearch } from "../research/search.ts";
 import { DEFAULT_BUDGET, type BudgetLimits, type BudgetState, type Fetcher } from "../research/types.ts";
@@ -192,6 +193,15 @@ export function parseRangeLite(raw: string): StageContext["range"] {
   if (m) return [{ unit: "episode", from: Number(m[1]), to: Number(m[2] ?? m[1]), label: s }];
   m = s.match(/^(\d+)(?:-(\d+))?巻$/);
   if (m) return [{ unit: "volume", from: Number(m[1]), to: Number(m[2] ?? m[1]), label: s }];
+  // AMENDMENT 16: the lite parser must not degrade an arc / season / installment / film range to "whole"
+  // (job rework and job run build their range here; the queue parser in queue/range.ts is the full grammar).
+  m = s.match(/^第?(\d+)作目$/);
+  if (m) return [{ unit: "installment", from: Number(m[1]), to: Number(m[1]), label: s }];
+  m = s.match(/^第(\d+)(?:-(\d+))?(?:シーズン|期)$/);
+  if (m) return [{ unit: "season", from: Number(m[1]), to: Number(m[2] ?? m[1]), label: s }];
+  if (s.startsWith("劇場版")) return [{ unit: "film", from: null, to: null, label: s }];
+  m = s.match(/^「(.+)」編$/) ?? s.match(/^(.+?)編$/);
+  if (m && s !== "全編") return [{ unit: "arc", from: null, to: null, label: s }];
   return [{ unit: "whole", from: null, to: null, label: s }];
 }
 
@@ -230,13 +240,14 @@ export function newJobState(
 
 // ---------- stage table ----------
 
-function workBrief(workDir: string) {
+function workBrief(workDir: string, range?: StageContext["range"]) {
   const w = readWork(workDir);
   return {
     title: w.title,
     creators: (w.creators ?? []).map((c: unknown) => (typeof c === "string" ? c : String((c as { name?: string }).name ?? ""))),
     medium: w.medium,
     first_release: w.first_release_year != null ? String(w.first_release_year) : null,
+    scope: scopeText(range),
   };
 }
 
@@ -288,13 +299,13 @@ const ROUND1_ASPECTS = ["bibliographic", "M01", "M03", "M02", "M06", "M07", "M10
 function defaultStage(name: Exclude<StageName, "identify">, st: JobState, overrides?: RunnerDeps["stageOverrides"]): (ctx: StageContext) => Promise<StageResult> {
   switch (name) {
     case "search_plot":
-      return (ctx) => runPlotSearch(ctx, { work: workBrief(ctx.workDir) });
+      return (ctx) => runPlotSearch(ctx, { work: workBrief(ctx.workDir, ctx.range) });
     case "search_r1":
       return (ctx) =>
         runSearch(ctx, {
           round: 1,
           aspects: ROUND1_ASPECTS,
-          work: workBrief(ctx.workDir),
+          work: workBrief(ctx.workDir, ctx.range),
           maxSearches: 14,
           instructionUrls: st.request.instruction_urls,
           // AMENDMENT 12: the analysis frame's allowance leaves the reserve for the coverage rounds
@@ -305,9 +316,9 @@ function defaultStage(name: Exclude<StageName, "identify">, st: JobState, overri
     case "review_r1":
       return (ctx) => reviewClaims(ctx, { maxRounds: 2, workTitle: workBrief(ctx.workDir).title });
     case "followup":
-      return (ctx) => coverageFollowUp(ctx, { work: workBrief(ctx.workDir) });
+      return (ctx) => coverageFollowUp(ctx, { work: workBrief(ctx.workDir, ctx.range) });
     case "gapfill":
-      return (ctx) => gapFill(ctx, { work: workBrief(ctx.workDir) });
+      return (ctx) => gapFill(ctx, { work: workBrief(ctx.workDir, ctx.range) });
     case "refact":
       return refact;
     case "modules":
@@ -539,7 +550,7 @@ async function runIdentify(st: JobState, deps: RunnerDeps, log: (m: string) => v
   const override = deps.stageOverrides?.identify;
   if (override) throw new Error("identify cannot be overridden");
   const r = await identify(
-    { jobId: st.job_id, workQuery: st.request.work_query, mediumHint: st.request.medium_hint },
+    { jobId: st.job_id, workQuery: st.request.work_query, mediumHint: st.request.medium_hint, installment: st.request.range?.find((r) => r.unit === "installment")?.from ?? null },
     { luna: deps.luna, fetcher: deps.fetcher, worksDir: deps.worksDir, budget: st.budget, now, log },
   );
   if (r.status === "clarifying") {

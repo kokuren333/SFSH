@@ -577,3 +577,34 @@ test("verified aliases_seen are recorded as attested; unverifiable ones are drop
   assert.deepEqual(w.aliases.map((a) => [a.text, a.kind, a.attested, a.source_ids]), [["まどマギ", "common", true, [sidOf(U_WIKI)]]]);
   assert.equal(r.metrics.aliases_dropped, 1);
 });
+
+// ------------------------------------------------------------------ A16: installment selector
+
+test("A16: 「N作目」 never resolves to the base work through the index shortcut", async () => {
+  const worksDir = tmpWorks();
+  const U_BASE = "https://example.jp/matrix1999";
+  const U_SEQ = "https://example.jp/matrix-reloaded";
+  const pages: Record<string, Page> = {
+    [U_BASE]: { tier: "T1", site_key: "example.jp", text: "映画『マトリックス』公式ページ\n1999年公開。監督：ウォシャウスキー姉妹" },
+    [U_SEQ]: { tier: "T1", site_key: "example.jp", text: "映画『マトリックス リローデッド』公式ページ\n2003年公開。監督：ウォシャウスキー姉妹" },
+  };
+  const cand = (title: string, reading: string, year: number, url: string, quote: string): ExtractedCandidate => ({
+    title, title_original: null, title_reading: reading, medium: "film",
+    creators: ["ウォシャウスキー"], first_release_year: year,
+    evidence: [{ source_id: sidOf(url), quote }], aliases_seen: [],
+  });
+  // 1. the base work enters the index
+  const luna1 = fakeLuna({ results: [U_BASE], candidates: [cand("マトリックス", "まっとりくす", 1999, U_BASE, "映画『マトリックス』公式ページ")] });
+  const r1 = await identify({ jobId: "job-a16-1", workQuery: "マトリックス", mediumHint: null }, deps(worksDir, luna1, new FakeFetcher(pages)));
+  assert.equal(r1.status, "resolved");
+  const baseId = r1.resolved!.work_id;
+  // 2. the same query with installment 2 must research and resolve the sequel, not the base work
+  const luna2 = fakeLuna({ results: [U_SEQ], candidates: [cand("マトリックス リローデッド", "まっとりくす りろーでっど", 2003, U_SEQ, "映画『マトリックス リローデッド』公式ページ")] });
+  const r2 = await identify({ jobId: "job-a16-2", workQuery: "マトリックス", mediumHint: null, installment: 2 }, deps(worksDir, luna2, new FakeFetcher(pages)));
+  assert.equal(r2.status, "resolved");
+  assert.equal(r2.resolved!.title, "マトリックス リローデッド");
+  assert.notEqual(r2.resolved!.work_id, baseId);
+  assert.notEqual(r2.resolved!.method, "index_match");
+  const searchCall = luna2.calls.find((c) => c.task === "s0.identify.search");
+  assert.ok(searchCall && searchCall.prompt.includes("第2作目"), "search prompt carries the installment instruction");
+});

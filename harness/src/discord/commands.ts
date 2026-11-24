@@ -44,7 +44,7 @@ export const SFSH_COMMAND: ApplicationCommand = {
   options: [
     sub("request", "作品の解説ページ作成を依頼する", [
       str("work", "作品名", true, WORK_QUERY_MAX),
-      str("range", "範囲（例: 全体 / 1-3巻 / 1-12話 / 第2シーズン / 「無限列車」編 / 劇場版）", true, 100),
+      str("range", "範囲（例: 全体 / 1-3巻 / 1-12話 / 第2シーズン / 「無限列車」編 / 劇場版 / 2作目）", true, 100),
       str("medium", "媒体のヒント（manga / anime / novel など）", false, 40),
       str("note", "メモ", false, NOTE_MAX),
     ]),
