@@ -155,3 +155,12 @@ node harness/src/cli.ts publish               # bare へ公開
 node harness/src/cli.ts publish serve-test    # bare の main を http://127.0.0.1:8790/ で配信（Pages の代わり）
 node harness/probes/m5_bare_check.ts          # bare の独立検査（コミット数・ファイル・マニフェスト）
 ```
+
+
+## A17 書籍の種別と再同定
+
+- 書籍は `--medium book`。同定で媒体と別に fiction / nonfiction / mixed を根拠付きで確定する。判定不能は `kind_unknown` の聞き返しとなる。根拠のない手動のfiction指定はしない。正式題名・書誌出典を添えて再同定する。
+- 既存のkind未記録作品は表示のみ従来互換。新たな同定ではインデックス近道を使わず調査する。`job rework` はkind確認前に素材を退避しないため、先に `job run --work "正式題名" --until identify` を行う。
+- `--range "第2部"` / `--range "第3章〜第5章"` / `--range "第2節"`。部・章・節もA16と同じscopeTextが検索・抽出・査読へ伝わる。
+- BKGの選択と理由は `nkg/module_selection.json` / `nkg/page_menu.json`、本文は `gen/book_pages.json`、公開用は `gen/public.json` のbook。物語用の旧gen/pagesが残っていてもnonfictionのcomposeでは読み込まない。regenはBKGの本文だけを再執筆できる。図の変更にはS2から再構築する。
+- 選ばなかった項目は不足ではない。conformはnonfictionに物語の字数・結末・人物追跡を要求せず、選択したBKG根拠と接続を測る。A-1/A-2はBKG全文を対象に維持する。

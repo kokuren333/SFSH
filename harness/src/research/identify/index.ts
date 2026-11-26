@@ -82,7 +82,7 @@ export interface IdentifyCandidate {
   creators: string[];
 }
 
-export type ClarifyReason = "multiple_index_matches" | "multiple_candidates" | "no_candidates" | "no_reading";
+export type ClarifyReason = "multiple_index_matches" | "multiple_candidates" | "no_candidates" | "no_reading" | "kind_unknown";
 
 export interface IdentifyResult {
   status: "resolved" | "clarifying";
@@ -115,7 +115,12 @@ export async function identify(input: IdentifyInput, deps: IdentifyDeps): Promis
     if (narrowed.length < matches.length) deps.log(`S0: medium_hint=${hint} narrows index matches ${matches.length} → ${narrowed.length}`);
     matches = narrowed;
   }
-  if (matches.length === 1) return resolveFromIndex(matches[0], input, key, deps, at);
+  if (matches.length === 1) {
+    const existing=readWork(path.join(deps.worksDir,matches[0]));
+    if(existing.kind&&existing.kind_basis?.source_ids.length)return resolveFromIndex(matches[0], input, key, deps, at);
+    deps.log("S0: legacy work has no verified kind; index shortcut skipped for classification research");
+    return research(input,key,hint,index,deps,at);
+  }
   if (matches.length > 1) {
     deps.log(`S0: "${key}" matches ${matches.length} works in INDEX → clarifying`);
     return {
@@ -138,6 +143,13 @@ export async function identify(input: IdentifyInput, deps: IdentifyDeps): Promis
 function resolveFromIndex(workId: string, input: IdentifyInput, key: string, deps: Pick<IdentifyDeps, "worksDir" | "log">, at: () => string): IdentifyResult {
   const workDir = path.join(deps.worksDir, workId);
   const work = readWork(workDir);
+  if (!work.kind || !work.kind_basis?.source_ids.length) return {
+    status:"clarifying", reason:"kind_unknown", workDir,
+    candidates:[{title:work.title,medium:work.medium,first_release_year:work.first_release_year,work_id:workId,creators:work.creators}],
+    metrics:{method:"index_match", model_calls:0, searches_used:0, fetches_used:0},
+    notice:"種別（fiction / nonfiction / mixed）の根拠が未確認です。書誌出典を指定して再同定してください。",
+  };
+  deps.log(`S0 kind=${work.kind}: ${work.kind_basis.reason} sources=${work.kind_basis.source_ids.join(",")}`);
   const sources = loadWorkSources(workDir);
   const outcome = recordInputAlias(work, key, sources, input.jobId, at());
   if (outcome === "added" || outcome === "merged") {
@@ -365,6 +377,7 @@ interface ResolveContext {
 function resolveCandidate(r: ResolveContext): IdentifyResult {
   const { input, key, index, staging, cards, loaded, trace, traceFile, metrics, finalists, cand, clarify, deps, at } = r;
   const { log } = deps;
+  if (!cand.kind || !cand.kind_evidence?.length) return clarify("kind_unknown", finalists);
   const cardMap = new Map(cards.map((c) => [c.source_id, c]));
   const titleStatus = decideTitleStatus(cand.evidence, cardMap);
   const evidenceIds = [...new Set(cand.evidence.map((e) => e.source_id))].sort();
@@ -423,6 +436,11 @@ function resolveCandidate(r: ResolveContext): IdentifyResult {
     addAlias(work, { text: a.text, kind: a.kind, attested: true, source_ids: a.source_ids, origin_job_id: input.jobId, first_seen: now });
   }
   const aliasOutcome = recordInputAlias(work, key, [...allSources.values()], input.jobId, now);
+  if (cand.medium === "book") work.medium = "book";
+  work.kind = cand.kind;
+  work.kind_basis = { reason: cand.kind_reason ?? "", source_ids: [...new Set((cand.kind_evidence ?? []).map(e => e.source_id))] };
+  work.history.push({ at:now, event:"kind_identified", job_id:input.jobId, detail:JSON.stringify(work.kind_basis) + ` kind=${work.kind}` });
+  log(`S0 kind=${work.kind}: ${work.kind_basis.reason} sources=${work.kind_basis.source_ids.join(",")}`);
   writeWork(target, work);
   rebuildIndex(deps.worksDir);
   metrics.alias = aliasOutcome;
@@ -469,6 +487,7 @@ export function finalizeStagedCandidate(
   const tracedList: Traced[] =
     (trace.finalists as Traced[] | undefined) ?? applyMediumHint((trace.verified as Traced[] | undefined) ?? [], normalizeMediumHint(input.mediumHint)).list;
   const finalists: VerifiedCandidate[] = tracedList.map((c) => ({
+    kind: c.kind, kind_reason:c.kind_reason, kind_evidence:c.kind_evidence,
     title: c.title,
     title_original: c.title_original ?? null,
     title_reading: c.title_reading,
@@ -530,7 +549,7 @@ export function capSearchEvents(events: WebSearchEvent[], cap: number): { events
 function findExistingWork(index: WorksIndex, c: VerifiedCandidate): string | null {
   const tKey = normKey(c.title);
   const hits = index.works.filter((e: IndexEntry) => {
-    if (e.medium !== c.medium) return false;
+    if (e.medium !== c.medium && !(["novel","book"].includes(e.medium) && ["novel","book"].includes(c.medium))) return false;
     const names = [e.title, e.title_original, ...(e.aliases ?? []).map((a) => a.text)].filter((x): x is string => !!x);
     return names.some((n) => normKey(n) === tKey);
   });
@@ -660,6 +679,7 @@ function mergeStaging(staging: string, target: string): void {
 
 function traceCandidate(c: VerifiedCandidate) {
   return {
+    kind: c.kind, kind_reason:c.kind_reason, kind_evidence:c.kind_evidence,
     title: c.title,
     title_original: c.title_original,
     medium: c.medium,

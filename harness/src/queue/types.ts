@@ -74,7 +74,7 @@ export type Origin = "discord" | "muse" | "cli";
 export type Priority = "normal" | "high";
 
 /** §4.1 range item. "film" is an orchestrator addition for 「劇場版」 (CP-037; schema type additions are allowed by §7.1). */
-export type RangeUnit = "whole" | "volume" | "episode" | "arc" | "season" | "film" | "installment";
+export type RangeUnit = "whole" | "volume" | "episode" | "arc" | "season" | "film" | "installment" | "part" | "chapter" | "section";
 export interface RangeItem {
   unit: RangeUnit;
   from: number | null;

@@ -76,7 +76,18 @@
         "M09",
         "M10",
         "M11",
-        "M12"
+        "M12",
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B09",
+        "B10",
+        "B11"
       ]
     },
     "node_module": {
@@ -93,6 +104,17 @@
         "M10",
         "M11",
         "M12",
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B09",
+        "B10",
+        "B11",
         "extra"
       ]
     },
@@ -349,7 +371,12 @@
             "episode",
             "arc",
             "season",
-            "whole"
+            "whole",
+            "film",
+            "installment",
+            "part",
+            "chapter",
+            "section"
           ]
         },
         "from": {
@@ -452,8 +479,16 @@
             "$ref": "#/definitions/creator"
           }
         },
+        "kind": {
+          "enum": [
+            "fiction",
+            "nonfiction",
+            "mixed"
+          ]
+        },
         "medium": {
           "enum": [
+            "book",
             "novel",
             "manga",
             "anime",
@@ -585,6 +620,633 @@
             "insufficient_sources",
             "conflicting_sources",
             "out_of_coverage"
+          ]
+        }
+      }
+    },
+    "node_Thesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Thesis"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Argument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Argument"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Concept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Concept"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Evidence"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Outline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Outline"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_AuthorContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "AuthorContext"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Criticism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Criticism"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Assumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Assumption"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_Chronology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "Chronology"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_OpenQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "OpenQuestion"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "node_BookTopic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "module",
+        "label",
+        "based_on",
+        "meta",
+        "stance",
+        "section"
+      ],
+      "properties": {
+        "type": {
+          "const": "BookTopic"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "module": {
+          "$ref": "#/definitions/node_module"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "based_on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "stance": {
+          "enum": [
+            "author_claim",
+            "fact",
+            "harness_interpretation"
+          ]
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
           ]
         }
       }
@@ -1475,6 +2137,70 @@
         }
       }
     },
+    "edge_ArgumentLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta",
+        "relation"
+      ],
+      "properties": {
+        "type": {
+          "const": "ArgumentLink"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "relation": {
+          "type": "string"
+        }
+      }
+    },
+    "edge_ConceptLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "meta",
+        "relation"
+      ],
+      "properties": {
+        "type": {
+          "const": "ConceptLink"
+        },
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "from": {
+          "$ref": "#/definitions/id"
+        },
+        "to": {
+          "$ref": "#/definitions/id"
+        },
+        "meta": {
+          "$ref": "#/definitions/meta"
+        },
+        "relation": {
+          "type": "string"
+        }
+      }
+    },
     "edge_Relation": {
       "type": "object",
       "additionalProperties": false,
@@ -1906,6 +2632,17 @@
       "properties": {
         "type": {
           "enum": [
+            "Thesis",
+            "Argument",
+            "Concept",
+            "Evidence",
+            "Outline",
+            "AuthorContext",
+            "Criticism",
+            "Assumption",
+            "Chronology",
+            "OpenQuestion",
+            "BookTopic",
             "Character",
             "Faction",
             "Event",
@@ -1929,6 +2666,39 @@
         "propertyName": "type"
       },
       "oneOf": [
+        {
+          "$ref": "#/definitions/node_Thesis"
+        },
+        {
+          "$ref": "#/definitions/node_Argument"
+        },
+        {
+          "$ref": "#/definitions/node_Concept"
+        },
+        {
+          "$ref": "#/definitions/node_Evidence"
+        },
+        {
+          "$ref": "#/definitions/node_Outline"
+        },
+        {
+          "$ref": "#/definitions/node_AuthorContext"
+        },
+        {
+          "$ref": "#/definitions/node_Criticism"
+        },
+        {
+          "$ref": "#/definitions/node_Assumption"
+        },
+        {
+          "$ref": "#/definitions/node_Chronology"
+        },
+        {
+          "$ref": "#/definitions/node_OpenQuestion"
+        },
+        {
+          "$ref": "#/definitions/node_BookTopic"
+        },
         {
           "$ref": "#/definitions/node_Character"
         },
@@ -1987,6 +2757,8 @@
       "properties": {
         "type": {
           "enum": [
+            "ArgumentLink",
+            "ConceptLink",
             "Relation",
             "Causes",
             "Knows",
@@ -2006,6 +2778,12 @@
         "propertyName": "type"
       },
       "oneOf": [
+        {
+          "$ref": "#/definitions/edge_ArgumentLink"
+        },
+        {
+          "$ref": "#/definitions/edge_ConceptLink"
+        },
         {
           "$ref": "#/definitions/edge_Relation"
         },

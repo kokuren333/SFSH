@@ -71,7 +71,8 @@ export function authoringPrompt(input: {
   existing: { id: string; type: string; label: string }[];
   hints: string[];
 }): string {
-  const role =
+  const book = input.specs.some(s=>s.module.startsWith("B"));
+  const role = book ? "あなたは非物語書籍のBKG構造化担当です。中心命題・論証・概念・証拠・著者と文脈・批判・留保を整理します。人物や結末へ変換しない。著者の主張と実証済みの事実とハーネス解釈をstanceで分離。予測は予測とする。テーマも論点として記述する。" :
     input.layer === "fact"
       ? "あなたは事実層の担当です。調査済み claim を物語の構造（人物・出来事・因果・秘密・世界のルール・文脈）へ整理します。新しい事実を足さず、claim にあることだけを構造化してください。"
       : "あなたは解釈層の担当です。事実層のノードと claim をもとに、結末に至る理由・動機・変容・テーマ・感情の流れを分析し、独自の言葉で批評的に構成します。分析は based_on に根拠ノードを挙げてください。";

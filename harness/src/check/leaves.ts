@@ -111,6 +111,7 @@ export function inA2Scope(path: readonly Seg[]): boolean {
 
 /** Page text written by Haiku in S3 (overview / figure notes / intros / quiz / synopsis — AMENDMENT 11). */
 export function isPageText(path: readonly Seg[]): boolean {
+  if (path[0] === "book" && path[1] === "pages") return true;
   if (path[0] !== "pages") return false;
   if (path[1] === "overview" || path[1] === "figure_notes" || path[1] === "quiz" || path[1] === "synopsis") return true;
   return path[2] === "intro";

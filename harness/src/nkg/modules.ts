@@ -1,3 +1,5 @@
+import { BOOK_MENU } from "./bookMenu.ts";
+import { selectBookModules } from "./bookSelection.ts";
 /**
  * S2 module selection (WP-1.4, REQUIREMENTS §2.5 / §1.3 sufficiency).
  * Luna picks genres from the controlled vocabulary → code expands genre_profiles.json →
@@ -116,6 +118,8 @@ export function readWorkTitle(workDir: string, fallback: string): string {
 
 /** Stage function: S2 modules. Idempotent (overwrites nkg/module_selection.json). */
 export async function selectModules(ctx: StageContext): Promise<StageResult> {
+  const kind = readJson<{kind?:string}>(ctx.workDir,"work.json",{}).kind;
+  if (kind === "nonfiction") return selectBookModules(ctx);
   const vocab = loadGenreVocabulary();
   const profiles = loadGenreProfiles();
   const claims = readActiveClaims(ctx.workDir);
@@ -159,8 +163,8 @@ export async function selectModules(ctx: StageContext): Promise<StageResult> {
     prompt: moduleReviewPrompt({
       title,
       genres: accepted,
-      alwaysOn: profiles.always_on,
-      selectable: profiles.selectable,
+      alwaysOn: [],
+      selectable: MODULE_IDS.filter(m => m.startsWith("M")),
       enabled: expansion.enabled,
       claimCounts,
       claims: ordered,
@@ -177,7 +181,7 @@ export async function selectModules(ctx: StageContext): Promise<StageResult> {
   for (const a of review.additions ?? []) {
     const m = a.module.trim().toUpperCase();
     if (!(MODULE_IDS as readonly string[]).includes(m)) rejected.push({ action: "add", module: a.module, reason: a.reason, why: "invalid_module_id" });
-    else if (!profiles.selectable.includes(m)) rejected.push({ action: "add", module: m, reason: a.reason, why: profiles.always_on.includes(m) ? "always_on" : "not_selectable" });
+    else if (!m.startsWith("M")) rejected.push({ action: "add", module: m, reason: a.reason, why: profiles.always_on.includes(m) ? "always_on" : "not_selectable" });
     else if (enabled.has(m)) rejected.push({ action: "add", module: m, reason: a.reason, why: "already_enabled" });
     else {
       enabled.add(m);
@@ -188,7 +192,6 @@ export async function selectModules(ctx: StageContext): Promise<StageResult> {
   for (const d of review.removals ?? []) {
     const m = d.module.trim().toUpperCase();
     if (!(MODULE_IDS as readonly string[]).includes(m)) rejected.push({ action: "remove", module: d.module, reason: d.reason, why: "invalid_module_id" });
-    else if (profiles.always_on.includes(m)) rejected.push({ action: "remove", module: m, reason: d.reason, why: "always_on" });
     else if (!enabled.has(m)) rejected.push({ action: "remove", module: m, reason: d.reason, why: "not_enabled" });
     else {
       enabled.delete(m);
@@ -201,7 +204,7 @@ export async function selectModules(ctx: StageContext): Promise<StageResult> {
   const min = profiles.sufficiency_min_claims ?? 3;
   const insufficient: ModuleSelectionFile["insufficient"] = [];
   const gaps: Gap[] = [];
-  const selection: ModuleChoice[] = MODULE_IDS.map((m): ModuleChoice => {
+  const selection: ModuleChoice[] = MODULE_IDS.filter(m=>m.startsWith("M")).map((m): ModuleChoice => {
     if (!enabled.has(m)) return { module: m, weight: 0, enabled: false, reason: reasons[m] ?? "not_selected" };
     if (claimCounts[m] < min) {
       insufficient.push({ module: m, claims: claimCounts[m], threshold: min });
@@ -223,6 +226,19 @@ export async function selectModules(ctx: StageContext): Promise<StageResult> {
     module_selection: selection,
     gaps,
   };
+  if (kind === "mixed") {
+    await selectBookModules(ctx);
+    const book = readJson<ModuleSelectionFile>(ctx.workDir,NKG_FILES.moduleSelection,file);
+    file.module_selection = [...file.module_selection.filter(m=>m.module.startsWith("M")),...book.module_selection];
+  }
+  const ids=new Set(usable.map(c=>c.claim_id));
+  const extra=(review.additional_pages??[]).filter(p=>/^[a-z][a-z-]{1,40}$/.test(p.slug)&&p.label.trim()&&p.claim_refs.some(id=>ids.has(id))&&!['summary','sources','relations','matrix','reverse-plot','themes','events','people','context','quiz','interpretations',...BOOK_MENU.map(m=>m.slug)].includes(p.slug));
+  if(extra.length){
+    file.module_selection=file.module_selection.filter(m=>m.module!=="B11");
+    file.module_selection.push({module:"B11",enabled:true,weight:1,reason:extra.map(p=>p.reason).join('; ')});
+    const menu=readJson<{pages:unknown[]}>(ctx.workDir,"nkg/page_menu.json",{pages:[]});
+    writeJson(ctx.workDir,"nkg/page_menu.json",{...menu,pages:[...menu.pages,...extra.map(p=>({module:"B11",slug:p.slug,label:p.label}))],additional_pages:extra});
+  }
   const out = writeJson(ctx.workDir, NKG_FILES.moduleSelection, file);
   ctx.log(`s2.modules: genres=[${accepted.map((a) => a.slug).join(",")}] enabled=[${selection.filter((s) => s.enabled).map((s) => s.module).join(",")}] insufficient=[${insufficient.map((i) => i.module).join(",")}]`);
   return {

@@ -12,7 +12,7 @@ export interface StageContext {
   workDir: string;
   workId: string;
   /** Range of the job (4.1). */
-  range: { unit: "whole" | "volume" | "episode" | "arc" | "season" | "film" | "installment"; from: number | null; to: number | null; label: string }[];
+  range: { unit: "whole" | "volume" | "episode" | "arc" | "season" | "film" | "installment" | "part" | "chapter" | "section"; from: number | null; to: number | null; label: string }[];
   luna: ModelPort;
   haiku: ModelPort;
   fetcher: Fetcher;

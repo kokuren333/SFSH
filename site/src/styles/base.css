@@ -203,3 +203,8 @@ tr > :first-child { position: sticky; left: 0; background: var(--color-bg); }
   .text-column:has(.fig-main) > :not(.figure-column), .text-column:has(.fig-main) .figure-column > :not(.fig-main) { max-width: var(--layout-text-max); margin-inline: auto; }
   .text-column:has(.fig-main) > h1 { padding-inline: 0; }
 }
+
+.book-diagram { margin-block: var(--space-l); }
+.book-connection { margin-block: var(--space-l); }
+.book-box { border: var(--line-hair) solid var(--color-border); padding: var(--space-m); overflow-wrap: anywhere; }
+.book-arrow { text-align: center; overflow-wrap: anywhere; }

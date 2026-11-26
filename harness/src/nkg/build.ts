@@ -1,3 +1,5 @@
+import { BOOK_GROUPS } from "./elements.ts";
+import { readWork } from "../works/store.ts";
 /**
  * S2 stages (WP-1.5): buildPhases → buildFactLayer → buildInterpLayer → assembleNkg.
  * Each stage is (ctx: StageContext) => Promise<StageResult>, reads only earlier files and overwrites its own output.
@@ -125,6 +127,10 @@ const DEFAULT_PHASE_LABELS = ["序盤", "中盤", "結末"];
 // ------------------------------------------------------------------ phases
 export async function buildPhases(ctx: StageContext): Promise<StageResult> {
   const inp = loadInputs(ctx);
+  if (readWork(ctx.workDir).kind === "nonfiction") {
+    const phases = ["問いと前提", "論証の展開", "帰結と留保"].map((label,i) => ({id:`ph${i+1}`,label,order:i+1,scope:"論理上の区分（原著の章番号ではない）",claim_refs:[]}));
+    return { outputs:[writeJson(ctx.workDir,NKG_FILES.phases,{phases,fallback:false})], metrics:{phases:3}, warnings:[] };
+  }
   const warnings: string[] = [];
   const preferMore = inp.ms.expansion?.hints?.prefer_more_phases === true;
   const res = await ctx.luna.call({
@@ -186,6 +192,7 @@ const toolsFor = (m: ModelName) => (m === "luna" ? ({ tools: "none" } as const) 
 
 function hintsFor(inp: S2Inputs, layer: "fact" | "interp", repair?: RepairHints): string[] {
   const h: string[] = [];
+  if ([...inp.enabled].some(m => m.startsWith("B"))) h.push("A17: 非物語はBKG。人物・結末の物語へ変換しない。著者の主張を客観的事実と混同しない。主張/事実/ハーネス解釈はstanceで分離。harness_interpretationはsfsh_analysisとbased_on必須。予測は予測として記す。章立ては論理の流れ。根拠のない章番号は作らない。");
   // AMENDMENT 15: conformance repair — counts / presence only (what is missing), never an angle or a reading (P-1)
   if (layer === "fact" && repair?.fact) {
     const f = repair.fact;
@@ -257,7 +264,7 @@ async function buildLayer(ctx: StageContext, cfg: LayerConfig, maxRounds: number
         phases,
         claims: claimsFor(inp, specs),
         existing: summarize(existing),
-        hints: hintsFor(inp, cfg.layer, ctx.repair),
+        hints: [...hintsFor(inp, cfg.layer, ctx.repair), `追加ページ/選択ページのメニュー: ${JSON.stringify(readJson(ctx.workDir,"nkg/page_menu.json",{}))}`],
       }),
       schema: groupSchema(specs),
       ...toolsFor(author),
@@ -642,16 +649,21 @@ function finalizeContext(inp: S2Inputs, phases: { id: string; label?: string }[]
 
 /** Fact layer (M01, M03, M04, M05, M08, M09, M12 when enabled): Luna → Haiku review → Luna revise. */
 export function buildFactLayer(ctx: StageContext, maxRounds = REVIEW_MAX_ROUNDS): Promise<StageResult> {
-  return buildLayer(ctx, FACT, maxRounds);
+  const kind = readWork(ctx.workDir).kind;
+  const groups = kind === "nonfiction" ? [BOOK_GROUPS[0]] : kind === "mixed" ? [...FACT.groups, BOOK_GROUPS[0]] : FACT.groups;
+  return buildLayer(ctx, { ...FACT, groups }, maxRounds);
 }
 
 /** Interpretive layer (M02, M06, M07, M10, M11 when enabled + IconicMoment / Interpretation / Quiz): Haiku → Luna review → Haiku revise. */
 export function buildInterpLayer(ctx: StageContext, maxRounds = REVIEW_MAX_ROUNDS): Promise<StageResult> {
-  return buildLayer(ctx, INTERP, maxRounds);
+  const kind = readWork(ctx.workDir).kind;
+  const extra=readModuleSelection(ctx.workDir)?.module_selection.some(m=>m.module==="B11"&&m.enabled);
+  const groups = kind === "nonfiction" ? [BOOK_GROUPS[1]] : kind === "mixed" || extra ? [...INTERP.groups, BOOK_GROUPS[1]] : INTERP.groups;
+  return buildLayer(ctx, { ...INTERP, groups }, maxRounds);
 }
 
 // ------------------------------------------------------------------ assemble
-const MEDIA = new Set(["novel", "manga", "anime", "film", "drama", "game", "other"]);
+const MEDIA = new Set(["book", "novel", "manga", "anime", "film", "drama", "game", "other"]);
 const COPYRIGHT = new Set(["in_copyright", "public_domain", "unknown"]);
 
 function buildWork(ctx: StageContext, inp: S2Inputs, phases: Phase[]): NkgWork {
@@ -673,6 +685,7 @@ function buildWork(ctx: StageContext, inp: S2Inputs, phases: Phase[]): NkgWork {
     title: inp.title,
     title_alt: [...new Set<string>(titleAlt)],
     creators,
+    ...(w.kind ? { kind: w.kind } : {}),
     medium: MEDIA.has(w.medium) ? w.medium : "other",
     bibliographic: {
       publisher: typeof bib.publisher === "string" ? bib.publisher : null,
@@ -716,7 +729,7 @@ export async function assembleNkg(ctx: StageContext): Promise<StageResult> {
     const layerMissing = FACT_MODULES.includes(m) ? !fact : !interp;
     gaps.push({ module: m, what: layerMissing ? "層が未生成" : "採用できる要素が無かった（根拠不足で棄却または未生成）", reason: "insufficient_sources" });
   }
-  for (const t of ["IconicMoment", "Interpretation", "Quiz"] as const) {
+  for (const t of (readWork(ctx.workDir).kind === "nonfiction" ? [] : ["IconicMoment", "Interpretation", "Quiz"] as const)) {
     if (!fin.nodes.some((n) => n.type === t)) gaps.push({ module: "extra", what: `${t} 未生成（根拠不足）`, reason: "insufficient_sources" });
   }
 

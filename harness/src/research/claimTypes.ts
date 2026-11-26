@@ -9,12 +9,13 @@ export type ClaimAspect =
   | "title"
   | "genre"
   /** AMENDMENT 12: event-granular synopsis fact (who did what, what happened next), the "plot frame". */
+  | "B01" | "B02" | "B03" | "B04" | "B05" | "B06" | "B07" | "B08" | "B09" | "B10"
   | "plot"
   | "M01" | "M02" | "M03" | "M04" | "M05" | "M06"
   | "M07" | "M08" | "M09" | "M10" | "M11" | "M12";
 
 export const CLAIM_ASPECTS: readonly ClaimAspect[] = [
-  "bibliographic", "title", "genre", "plot",
+  "bibliographic", "title", "genre", "plot", "B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09", "B10",
   "M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12",
 ];
 

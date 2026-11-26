@@ -32,7 +32,7 @@ const SPOILER = en("none", "mid", "ending");
 const CAUSE_KIND = en("causes", "enables", "motivates", "prevents");
 const elementBase = { id: S, epistemic: EPISTEMIC, grade: GRADE, spoiler: SPOILER, source_refs: arr(S) };
 
-const TEXT_BLOCK = obj({ id: S, heading: nul(S), paragraphs: arr(S), spoiler: SPOILER, based_on: arr(S), epistemic: EPISTEMIC });
+const TEXT_BLOCK = obj({ stance: opt(en("author_claim","fact","harness_interpretation")), id: S, heading: nul(S), paragraphs: arr(S), spoiler: SPOILER, based_on: arr(S), epistemic: EPISTEMIC });
 
 // PlotNode is recursive: children are checked by the same spec (see check()).
 const PLOT_NODE_FIELDS: Record<string, Spec> = {
@@ -51,13 +51,20 @@ const PLOT_NODE_FIELDS: Record<string, Spec> = {
 
 export const PUBLIC_WORK_SPEC: Spec = obj({
   schema: { literal: "sfsh-public/1" },
+  book: opt(obj({
+    nodes: arr(obj({id:S,module:S,type:S,label:S,summary:nul(S),stance:en("author_claim","fact","harness_interpretation"),section:nul(S),grade:GRADE,epistemic:EPISTEMIC,source_refs:arr(S)})),
+    edges: arr(obj({id:S,from:S,to:S,relation:S,grade:GRADE,source_refs:arr(S)})),
+    pages: arr(obj({module:S,slug:S,label:S,blocks:arr(TEXT_BLOCK)}))
+  })),
   work: obj({
+    selected_modules: opt(arr(S)),
     work_id: S,
     title: S,
     title_original: nul(S),
     title_reading: nul(S),
     aliases_display: arr(S),
-    medium: en("novel", "manga", "anime", "film", "drama", "game", "other"),
+    kind: opt(en("fiction", "nonfiction", "mixed")),
+    medium: en("book", "novel", "manga", "anime", "film", "drama", "game", "other"),
     creators: arr(obj({ name: S, role: nul(S) })),
     genres: arr(S),
     tags: arr(S),

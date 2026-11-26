@@ -271,8 +271,8 @@ function researchLuna(): ModelPort & { calls: string[] } {
       } else if (req.task === "s0.identify.extract") {
         output = {
           candidates: [
-            { title: "時をかける少女", title_original: null, title_reading: "とき を かける しょうじょ", medium: "novel", creators: ["筒井康隆"], first_release_year: 1967, evidence: [{ source_id: sidOf(U_N), quote: "筒井康隆『時をかける少女』" }], aliases_seen: [] },
-            { title: "時をかける少女", title_original: null, title_reading: "とき を かける しょうじょ", medium: "film", creators: ["細田守"], first_release_year: 2006, evidence: [{ source_id: sidOf(U_F), quote: "アニメーション映画『時をかける少女』" }], aliases_seen: [] },
+            { title: "時をかける少女", title_original: null, title_reading: "とき を かける しょうじょ", medium: "novel", kind:"fiction",kind_reason:"fixture novel",kind_evidence:[{source_id:sidOf(U_N),quote:"筒井康隆『時をかける少女』"}], creators: ["筒井康隆"], first_release_year: 1967, evidence: [{ source_id: sidOf(U_N), quote: "筒井康隆『時をかける少女』" }], aliases_seen: [] },
+            { title: "時をかける少女", title_original: null, title_reading: "とき を かける しょうじょ", medium: "film", kind:"fiction",kind_reason:"fixture animation",kind_evidence:[{source_id:sidOf(U_F),quote:"アニメーション映画『時をかける少女』"}], creators: ["細田守"], first_release_year: 2006, evidence: [{ source_id: sidOf(U_F), quote: "アニメーション映画『時をかける少女』" }], aliases_seen: [] },
           ],
         };
       } else throw new Error(`unexpected luna task ${req.task}`);

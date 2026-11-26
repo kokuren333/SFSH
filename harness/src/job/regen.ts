@@ -31,6 +31,8 @@ export type RegenStageName = OfflineStageName;
 /** Files / dirs (relative to the work dir) that write / compose / autocheck overwrite — copied before the run. */
 export const REGEN_BACKUP_ITEMS = [
   "gen/pages",
+  "gen/book_pages.json",
+  "gen/book_write_report.json",
   "gen/public.json",
   "gen/write_report.json",
   "gen/synopsis_report.json",

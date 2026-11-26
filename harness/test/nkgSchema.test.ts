@@ -188,10 +188,10 @@ test("schema has no scene/dialogue/quotation/panel/original-text type, property 
     if (!s || typeof s !== "object") return;
     const o = s as Record<string, unknown>;
     for (const key of ["properties", "definitions", "$defs", "patternProperties"]) {
-      if (o[key] && typeof o[key] === "object") for (const k of Object.keys(o[key] as object)) names.push(`${at}/${key}/${k}`), FORBIDDEN.test(k) && hits.push(`${at}/${key}/${k}`);
+      if (o[key] && typeof o[key] === "object") for (const k of Object.keys(o[key] as object)) names.push(`${at}/${key}/${k}`), FORBIDDEN.test(k) && !["Outline", "node_Outline"].includes(k) && hits.push(`${at}/${key}/${k}`);
     }
-    if (Array.isArray(o.enum)) for (const v of o.enum) if (typeof v === "string") names.push(v), FORBIDDEN.test(v) && hits.push(`${at}/enum:${v}`);
-    if (typeof o.const === "string") (names.push(o.const), FORBIDDEN.test(o.const) && hits.push(`${at}/const:${o.const}`));
+    if (Array.isArray(o.enum)) for (const v of o.enum) if (typeof v === "string") names.push(v), FORBIDDEN.test(v) && v !== "Outline" && hits.push(`${at}/enum:${v}`);
+    if (typeof o.const === "string") (names.push(o.const), FORBIDDEN.test(o.const) && o.const !== "Outline" && hits.push(`${at}/const:${o.const}`));
     for (const [k, v] of Object.entries(o)) walk(v, `${at}/${k}`);
   };
   walk(schema, "#");

@@ -1,3 +1,4 @@
+import { BOOK_TYPES } from "./bookMenu.ts";
 /**
  * Drafts → NKG elements (WP-1.5 assembly). Deterministic code only:
  *  - claim_refs → meta.provenance (source_id from the claim's source_ids, locator "claim:<id>", support "direct")
@@ -272,6 +273,12 @@ function buildNode(
     based_on: basedOn,
     meta: baseMeta(it, prov, inferredOnly, ctx, note),
   };
+  if (BOOK_TYPES.includes(d._type as never) || d._type === "BookTopic") {
+    const stance = d.stance as "author_claim" | "fact" | "harness_interpretation";
+    if (stance === "harness_interpretation") base.meta.epistemic = "sfsh_analysis";
+    base.meta.spoiler = "none";
+    return { ...base, type: d._type, stance, section: str(d.section) || null } as NkgNode;
+  }
   switch (d._type) {
     case "Character":
     case "Faction":
@@ -414,6 +421,9 @@ function buildEdge(
     return p;
   };
   switch (d._type) {
+    case "ArgumentLink":
+    case "ConceptLink":
+      return { ...base, type: d._type, relation: str(d.relation) };
     case "Relation": {
       let changed = str(d.changed_by) || null;
       if (changed && nodes.get(changed)?.type !== "Event") {

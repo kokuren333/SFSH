@@ -1,3 +1,5 @@
+import { BOOK_MENU, BOOK_TYPES } from "../nkg/bookMenu.ts";
+import type { BookNode } from "../nkg/types.ts";
 /**
  * WP-2.2 public projection (REQUIREMENTS §2.6). Deterministic, no model calls.
  *
@@ -48,6 +50,7 @@ import { GEN_FILES, MAX_TAGS, loadGenreVocab, maxSpoiler, readFinalTags, readNkg
 
 /** Japanese display names of the aspects (modules) for `gaps` (fixed table). */
 export const ASPECT_LABELS: Record<string, string> = {
+  ...Object.fromEntries(BOOK_MENU.map(m=>[m.module,m.label])),
   M01: "人物関係",
   M02: "リバースプロット",
   M03: "因果関係",
@@ -118,7 +121,7 @@ const strOrNull = (v: unknown): string | null => {
   const s = str(v);
   return s ? s : null;
 };
-const MEDIA = new Set(["novel", "manga", "anime", "film", "drama", "game", "other"]);
+const MEDIA = new Set(["book", "novel", "manga", "anime", "film", "drama", "game", "other"]);
 const STATUSES = new Set(["completed", "ongoing", "unknown"]);
 const TIERS = new Set(["T1", "T2", "T3", "T4", "T5"]);
 
@@ -126,6 +129,7 @@ const TIERS = new Set(["T1", "T2", "T3", "T4", "T5"]);
 export function citableIds(pw: PublicWork): Map<string, { spoiler: Spoiler; epistemic: string }> {
   const m = new Map<string, { spoiler: Spoiler; epistemic: string }>();
   const add = (id: string, spoiler: Spoiler, epistemic: string) => m.set(id, { spoiler, epistemic });
+  for (const n of pw.book?.nodes ?? []) add(n.id,"none",n.epistemic);
   for (const c of pw.viz.relations.characters) add(c.id, c.spoiler, c.epistemic);
   for (const r of pw.viz.relations.relations) add(r.id, r.spoiler, r.epistemic);
   const walk = (n: PlotNode) => {
@@ -649,6 +653,14 @@ export function buildProjection(inp: ProjectionInput): { projection: PublicWork;
     sources: [],
   };
 
+  const bookNodes = pubNodes.filter(n=>BOOK_TYPES.includes(n.type as never)||n.type==="BookTopic") as BookNode[];
+  if (bookNodes.length || nkg.work.kind === "nonfiction") {
+    pw.book = {
+      nodes:bookNodes.map(n=>({id:n.id,module:n.module,type:n.type,label:n.label,summary:n.summary??null,stance:n.stance,section:n.section,grade:n.meta.confidence.grade,epistemic:n.meta.epistemic,source_refs:include(n)})),
+      edges:pubEdges.filter(e=>e.type==="ArgumentLink"||e.type==="ConceptLink").map(e=>({id:e.id,from:e.from,to:e.to,relation:(e as import("../nkg/types.ts").BookEdge).relation,grade:e.meta.confidence.grade,source_refs:include(e)})),
+      pages:BOOK_MENU.filter(m=>nkg.work.module_selection.some(s=>s.module===m.module&&s.enabled)).map(m=>({module:m.module,slug:m.slug,label:m.label,blocks:[]})),
+    };
+  }
   // pass 2: cross-references (public edge, both endpoints present in the PublicWork), ids sorted
   const present = citableIds(pw);
   const typeOfPresent = (id: string) => (present.has(id) ? pubNode.get(id)?.type : undefined);
@@ -801,11 +813,13 @@ export function buildProjection(inp: ProjectionInput): { projection: PublicWork;
   trees.forEach(walk);
   for (const x of [...characters, ...relations, ...themes, ...contexts, ...iconic, ...interpretations, ...quiz, ...(matrix?.secrets ?? []), ...(timeline?.events ?? []), ...events, ...motives, ...arcs, ...worldRules, ...setups, ...emotionBeats]) allSpoilers.push(x.spoiler);
   pw.work = {
+    selected_modules: nkg.work.module_selection.filter(m=>m.enabled).map(m=>m.module),
     work_id: str(work.work_id) || nkg.work.work_id,
     title,
     title_original: strOrNull(work.title_original),
     title_reading: strOrNull(work.title_reading),
     aliases_display: aliases,
+    ...(work.kind || nkg.work.kind ? { kind: (work.kind || nkg.work.kind)! } : {}),
     medium: (MEDIA.has(nkg.work.medium) ? nkg.work.medium : MEDIA.has(String(work.medium)) ? work.medium : "other") as PublicWorkHeader["medium"],
     creators: creators.length ? creators : (work.creators ?? []).map((c) => ({ name: str(c), role: null })).filter((c) => c.name),
     genres: uniq((nkg.work.genres ?? []).filter((g) => genreSlugs.has(g))),
@@ -880,8 +894,8 @@ export async function projectPublic(ctx: StageContext): Promise<StageResult> {
   const out = writeJson(ctx.workDir, GEN_FILES.projection, { ...projection, chain_dropout: chainDropout });
   const warnings: string[] = [];
   if (chainDropout.count > 0) warnings.push(`chain dropout: ${chainDropout.count} element(s) excluded because their root(s) are not public-eligible`);
-  if (!stats.characters) warnings.push("project: no public characters (figure A empty)");
-  if (!stats.trees) warnings.push("project: no public reverse-plot tree (figure B empty)");
+  if (projection.work.kind !== "nonfiction" && !stats.characters) warnings.push("project: no public characters (figure A empty)");
+  if (projection.work.kind !== "nonfiction" && !stats.trees) warnings.push("project: no public reverse-plot tree (figure B empty)");
   ctx.log(`s3.project: included=${stats.elements_included}/${stats.elements_total} chain_dropout=${chainDropout.count} chars=${stats.characters} rels=${stats.relations} trees=${stats.trees} matrix=${stats.matrix_secrets}x${stats.matrix_holders} sources=${stats.sources_kept}/${stats.sources_total}`);
   return {
     outputs: [out],

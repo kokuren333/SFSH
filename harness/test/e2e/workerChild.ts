@@ -61,6 +61,7 @@ export function okOverrides(): Partial<Record<StageName, (ctx: StageContext) => 
 export function seedWork(env: QueueEnv, w: Partial<Work> & { work_id: string; title: string; medium: string }): void {
   const at = "2026-01-01T00:00:00+09:00";
   const work: Work = {
+    kind: "fiction", kind_basis: {reason:"fiction fixture", source_ids:["s-fixture"]},
     title_original: null,
     title_reading: null,
     title_reading_basis: "source",

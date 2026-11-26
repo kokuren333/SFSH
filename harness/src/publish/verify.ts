@@ -75,6 +75,7 @@ export const CATALOG_FIELDS = [
   "title_reading",
   "aliases",
   "medium",
+  "kind",
   "creators",
   "genres",
   "tags",

@@ -1,3 +1,4 @@
+import { runSearch } from "./search.ts";
 import { isoLocal } from "../model/callLog.ts";
 import { stageWidth } from "../util/parallel.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
@@ -24,6 +25,7 @@ export const PLOT_SEGMENTS = ["結末（最終回・最終章・ラストで何�
 export const PLOT_SEGMENT_SEARCHES = 2;
 
 export async function runPlotSearch(ctx: StageContext, opts: { work: WorkBrief }): Promise<StageResult> {
+  if (opts.work.kind === "nonfiction") return runSearch(ctx,{round:1,aspects:["B01","B02","B03","B04","B05","B06","B07","B08","B09","B10"],work:opts.work,maxSearches:12});
   const warnings: string[] = [];
   const outputs = new Set<string>();
   const fr = (ctx.frames ?? FRAMES).plot;

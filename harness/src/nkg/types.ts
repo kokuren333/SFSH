@@ -123,7 +123,13 @@ export interface QuizNode extends NodeBase {
   quiz_type: "causal" | "motive" | "counterfactual";
 }
 
+export interface BookNode extends NodeBase {
+  type: "Thesis" | "Argument" | "Concept" | "Evidence" | "Outline" | "AuthorContext" | "Criticism" | "Assumption" | "Chronology" | "OpenQuestion" | "BookTopic";
+  stance: "author_claim" | "fact" | "harness_interpretation";
+  section: string | null;
+}
 export type NkgNode =
+  | BookNode
   | CharacterNode
   | FactionNode
   | EventNode
@@ -175,7 +181,9 @@ export interface ExplainsEdge extends EdgeBase { type: "Explains"; refs: string[
 /** to may be "work" (the work as a whole). */
 export interface AboutEdge extends EdgeBase { type: "About" }
 
+export interface BookEdge extends EdgeBase { type: "ArgumentLink" | "ConceptLink"; relation: string }
 export type NkgEdge =
+  | BookEdge
   | RelationEdge
   | CausesEdge
   | KnowsEdge
@@ -207,7 +215,7 @@ export interface Phase {
 }
 
 export interface CoverageUnit {
-  unit: "volume" | "episode" | "arc" | "season" | "whole" | "film" | "installment";
+  unit: "volume" | "episode" | "arc" | "season" | "whole" | "film" | "installment" | "part" | "chapter" | "section";
   from: number | null;
   to: number | null;
   label: string;
@@ -228,11 +236,12 @@ export interface Gap {
 }
 
 export interface NkgWork {
+  kind?: "fiction" | "nonfiction" | "mixed";
   work_id: string;
   title: string;
   title_alt: string[];
   creators: { name: string; role: string | null }[];
-  medium: "novel" | "manga" | "anime" | "film" | "drama" | "game" | "other";
+  medium: "book" | "novel" | "manga" | "anime" | "film" | "drama" | "game" | "other";
   bibliographic: {
     publisher: string | null;
     first_release: string | null;

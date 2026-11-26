@@ -1,3 +1,4 @@
+import { bookPageBody, bookSources } from "./book.ts";
 import { loadInput, readSource } from './input.ts';
 import { createOutput } from './output.ts';
 import { html } from './html.ts';
@@ -44,6 +45,12 @@ export async function buildSite(out: string, baseUrl?: string): Promise<number> 
   }
   for (const work of [...works].sort((a, b) => compareReading(a.work, b.work))) {
     page(`works/${work.work.work_id}/index.html`, work.work.title, workBody(work, index, tokens));
+    for (const bp of work.book?.pages ?? []) {
+      if (bp.slug === 'summary') continue;
+      if (!/^[a-z][a-z-]{1,40}$/.test(bp.slug) || Object.hasOwn(subpages,bp.slug)) throw new Error('Unsafe or duplicate book page route');
+      page(`works/${work.work.work_id}/${bp.slug}/index.html`, `${work.work.title} — ${bp.label}`, bookPageBody(work,bp.slug));
+    }
+    if (work.work.kind === 'nonfiction') page(`works/${work.work.work_id}/sources/index.html`, `${work.work.title} — 出典`, bookSources(work));
     for (const sub of Object.keys(subpages) as Subpage[]) if (hasSubpage(work, sub)) {
       page(`works/${work.work.work_id}/${sub}/index.html`, `${work.work.title} — ${subpages[sub]}`, subpageBody(work, sub, tokens, figures), undefined, true);
     }

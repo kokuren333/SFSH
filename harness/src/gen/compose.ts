@@ -22,6 +22,7 @@ import type { PageFile, WriteReport } from "./write.ts";
 function displayBlock(b: TextBlock, cite: Set<string>): TextBlock {
   return {
     id: b.id,
+    ...(b.stance ? {stance:b.stance} : {}),
     heading: b.heading ?? null,
     paragraphs: [...(b.paragraphs ?? [])],
     spoiler: b.spoiler,
@@ -126,10 +127,11 @@ export function composePublicWork(
   const quizPage = pages.quiz;
   const quiz = (quizPage ? (quizPage.items ?? []) : projection.pages.quiz).map((q) => displayQuiz(q, cite));
 
-  const synopsis = synopsisOf(pages.synopsis, cite);
+  const synopsis = projection.work.kind === "nonfiction" ? null : synopsisOf(pages.synopsis, cite);
 
   const pw: PublicWork = {
     schema: "sfsh-public/1",
+    ...(projection.book ? { book: structuredClone(projection.book) } : {}),
     work: { ...projection.work },
     phases: projection.phases,
     viz: projection.viz,
@@ -170,9 +172,9 @@ export async function composePublic(ctx: StageContext): Promise<StageResult> {
   const projection = readJson<PublicWork | null>(ctx.workDir, GEN_FILES.projection, null);
   if (!projection) throw new Error(`S3 compose: ${GEN_FILES.projection} missing — run projectPublic first`);
   const pages: Partial<Record<PageKey, PageFile | null>> = {};
-  for (const p of ["overview", "figure_notes", "themes", "context", "interpretations", "quiz", "synopsis"] as const) pages[p] = readJson<PageFile | null>(ctx.workDir, GEN_FILES.page(p), null);
+  for (const p of (projection.work.kind === "nonfiction" ? [] : ["overview", "figure_notes", "themes", "context", "interpretations", "quiz", "synopsis"] as const)) pages[p] = readJson<PageFile | null>(ctx.workDir, GEN_FILES.page(p), null);
   const warnings: string[] = [];
-  if (!pages.overview) warnings.push("compose: gen/pages missing — public.json has no page text (run writePages)");
+  if (projection.work.kind !== "nonfiction" && !pages.overview) warnings.push("compose: gen/pages missing — public.json has no page text (run writePages)");
 
   const now = ctx.now().toISOString();
   const hasWork = existsSync(path.join(ctx.workDir, "work.json"));
@@ -180,6 +182,10 @@ export async function composePublic(ctx: StageContext): Promise<StageResult> {
   const tags = existsSync(path.join(ctx.workDir, GEN_FILES.tags)) ? readFinalTags(ctx.workDir) : null;
   const pw = composePublicWork(projection, pages, { tags, first_published_at: work?.first_published_at ?? now, updated_at: now });
 
+  if (pw.book) {
+    const written = readJson<import("../../../site/src/public-types.ts").PublicBook["pages"]>(ctx.workDir,"gen/book_pages.json",[]);
+    pw.book.pages = written.map(p=>({...p,blocks:p.blocks.map(b=>displayBlock(b,new Set(citableIds(pw).keys())))}));
+  }
   const shape = checkPublicWork(pw);
   const forbidden = forbiddenContent(pw);
   if (shape.length || forbidden.length) throw new Error(`S3 compose: public.json rejected: ${[...shape, ...forbidden].slice(0, 8).join("; ")}`);
@@ -205,6 +211,17 @@ export async function composePublic(ctx: StageContext): Promise<StageResult> {
   const nkg = readJson<Nkg | null>(ctx.workDir, "nkg/nkg.json", null);
   const tagsFile = readJson<TagsAuthorship | null>(ctx.workDir, GEN_FILES.tags, null);
   const auth = authorshipCheck(nkg, Object.values(pages), tagsFile && typeof tagsFile === "object" ? tagsFile : null);
+  if (pw.book) {
+    const bookReview = readJson<{ authored_by?: string; reviewed_by?: string } | null>(ctx.workDir, "gen/reviews/book.json", null);
+    const count = pw.book.pages.reduce((n,p)=>n+p.blocks.length,0);
+    const bad = !bookReview?.authored_by || !bookReview.reviewed_by || bookReview.authored_by === bookReview.reviewed_by;
+    auth.page_units_checked += count;
+    if (bad && count) {
+      auth.page_violations += count;
+      auth.violations_total += count;
+      auth.violation_ids.push(...pw.book.pages.flatMap(p=>p.blocks.map(b=>`book:${p.slug}:${b.id}`)));
+    }
+  }
   const report = readJson<WriteReport | null>(ctx.workDir, GEN_FILES.writeReport, null);
   const plotCount = (ns: PlotNode[]): number => ns.reduce((s, n) => s + 1 + plotCount(n.children), 0);
   const blocksCount = {

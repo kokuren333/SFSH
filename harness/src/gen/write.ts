@@ -67,7 +67,7 @@ export type EssayPage = (typeof ESSAY_PAGES)[number];
  * items (reception cannot be inferred from the story elements).
  */
 export function essayPages(pw: PublicWork): Record<EssayPage, boolean> {
-  return { themes: true, context: pw.pages.context.items.length + pw.pages.context.iconic.length > 0, interpretations: true };
+  return { themes: !pw.work.selected_modules || pw.work.selected_modules.includes("M10"), context: pw.pages.context.items.length + pw.pages.context.iconic.length > 0, interpretations: true };
 }
 
 export type Slot = "overview" | "relations" | "reverse_plot" | "matrix" | "intro" | "quiz" | "synopsis";

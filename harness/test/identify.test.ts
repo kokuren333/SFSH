@@ -106,7 +106,7 @@ function fakeLuna(script: Script): ModelPort & { calls: ModelRequest[] } {
         output = { selections: (script.selections ?? results).map((u) => ({ url: u, why: "bibliographic", tier_suggested: null })) };
       } else if (req.task === "s0.identify.extract") {
         assert.equal(req.tools, "none");
-        output = { candidates: script.candidates };
+        output = { candidates: script.candidates.map(c=>({kind:"fiction",kind_reason:"fixture fiction",kind_evidence:c.evidence,...c})) };
       } else throw new Error(`unexpected task ${req.task}`);
       const v = validateAgainst(req.schema, output);
       assert.ok(v.ok, `${req.task}: output must satisfy schema: ${JSON.stringify(v)}`);

@@ -1,3 +1,5 @@
+import { readJson } from "../nkg/io.ts";
+import { runSearch } from "./search.ts";
 import fs from "node:fs";
 import { stageWidth } from "../util/parallel.ts";
 import path from "node:path";
@@ -281,6 +283,7 @@ function sumRounds(rounds: RoundResult[]) {
 // ------------------------------------------------------------------ stage: followup (S1, before review_r1)
 
 export async function coverageFollowUp(ctx: StageContext, opts: { work: WorkBrief; maxRounds?: number }): Promise<StageResult> {
+  if (opts.work.kind === "nonfiction") return bookFollowUp(ctx,opts.work);
   const warnings: string[] = [];
   const outputs = new Set<string>([RESEARCH_FILES.claims]);
   const before = claimCoverage(readClaims(ctx.workDir));
@@ -341,6 +344,7 @@ export function currentFactCoverage(workDir: string) {
 }
 
 export async function gapFill(ctx: StageContext, opts: { work: WorkBrief; maxRounds?: number }): Promise<StageResult> {
+  if (opts.work.kind === "nonfiction") return {outputs:[],metrics:{book_coverage_deferred_to_conform:1},warnings:[]};
   const warnings: string[] = [];
   const outputs = new Set<string>(["research/coverage.json"]);
   const factBefore = currentFactCoverage(ctx.workDir);
@@ -403,6 +407,8 @@ export async function gapFill(ctx: StageContext, opts: { work: WorkBrief; maxRou
 // ------------------------------------------------------------------ stage: refact (rebuild the fact layer when gapfill added claims)
 
 export async function refact(ctx: StageContext): Promise<StageResult> {
+  const kind = readJson<{kind?:string}>(ctx.workDir,"work.json",{}).kind;
+  if (kind === "nonfiction" && !ctx.repair) return {outputs:[],metrics:{rebuilt:0},warnings:[]};
   const warnings: string[] = [];
   const last = [...readCoverage(ctx.workDir)].reverse().find((r) => r.stage === "gapfill" && r.event === "detect" && r.job_id === ctx.jobId);
   const added = last?.new_active_claims ?? 0;
@@ -436,4 +442,14 @@ export async function refact(ctx: StageContext): Promise<StageResult> {
   metrics.plot_claims_final = finalClaims.plot_claims;
   ctx.log(`s2.refact: rebuilt=${metrics.rebuilt} events=${after.events} fact shortfalls ${after.shortfalls.length}, claim shortfalls ${finalClaims.shortfalls.length}`);
   return { outputs: [...outputs], metrics, warnings };
+}
+
+async function bookFollowUp(ctx:StageContext,work:WorkBrief):Promise<StageResult>{
+  const claims=readClaims(ctx.workDir).filter(c=>c.status==="active");
+  const aspects=["B01","B02","B03","B05"].filter(a=>claims.filter(c=>c.aspects.includes(a)).length<3);
+  if(!aspects.length)return {outputs:[],metrics:{book_shortfalls:0},warnings:[]};
+  const r=await runSearch(ctx,{round:2,aspects,work,maxSearches:8});
+  const c=await extractClaims(ctx,{workTitle:work.title});
+  const v=await reviewClaims(ctx,{workTitle:work.title,maxRounds:2});
+  return {outputs:[...r.outputs,...c.outputs,...v.outputs],metrics:{book_shortfalls:aspects.length,...r.metrics},warnings:[...r.warnings,...c.warnings,...v.warnings]};
 }

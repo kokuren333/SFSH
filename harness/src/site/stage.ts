@@ -30,7 +30,7 @@ export async function stageWorks(worksDir = resolve(repoRoot, 'works'), site?: S
       return (data[name] as { slug: string; label: string }[]).map(v => { safeSegment(v.slug); return { slug: v.slug, label: v.label }; }).sort((a, b) => a.slug.localeCompare(b.slug, 'en'));
     } catch (e) { if (name === 'tags' && (e as NodeJS.ErrnoException).code === 'ENOENT') return []; throw e; }
   };
-  const index: SiteInputIndex = { schema: 'sfsh-index/1', generated_from: 'works/INDEX.json', works: [], vocab: { genres: await vocab('genres'), tags: await vocab('tags'), media: Object.entries({ novel: '小説', manga: '漫画', anime: 'アニメ', film: '映画', drama: 'ドラマ', game: 'ゲーム', other: 'その他' }).map(([slug, label]) => ({ slug: slug as Medium, label })) } };
+  const index: SiteInputIndex = { schema: 'sfsh-index/1', generated_from: 'works/INDEX.json', works: [], vocab: { genres: await vocab('genres'), tags: await vocab('tags'), media: Object.entries({ book: '書籍', novel: '小説', manga: '漫画', anime: 'アニメ', film: '映画', drama: 'ドラマ', game: 'ゲーム', other: 'その他' }).map(([slug, label]) => ({ slug: slug as Medium, label })) } };
   // Fixed, verified absolute target; never derive this deletion from caller input.
   if (!isWithin(repoRoot, staging) || staging === resolve(repoRoot)) throw new Error('Unsafe staging path');
   await rm(staging, { recursive: true, force: true });
@@ -53,7 +53,7 @@ export async function stageWorks(worksDir = resolve(repoRoot, 'works'), site?: S
     if (w.genres.some(g => !index.vocab.genres.some(v => v.slug === g)) || w.tags.some(t => !index.vocab.tags.some(v => v.slug === t))) throw new Error('Unknown public vocabulary');
     const item: CatalogItem = {
       work_id: w.work_id, url: `works/${w.work_id}/`, title: w.title, title_original: w.title_original, title_reading: w.title_reading,
-      aliases: entry.aliases.map(a => a.text), medium: w.medium, creators: w.creators.map(c => c.name), genres: w.genres, tags: w.tags,
+      aliases: entry.aliases.map(a => a.text), ...(w.kind ? {kind:w.kind} : {}), medium: w.medium, creators: w.creators.map(c => c.name), genres: w.genres, tags: w.tags,
       status: w.status, first_release_year: w.first_release_year, coverage_label: w.coverage_label, spoiler_max: w.spoiler_max,
       has_matrix: w.has_matrix, first_published_at: w.first_published_at, updated_at: w.updated_at,
     };

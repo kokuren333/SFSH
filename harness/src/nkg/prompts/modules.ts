@@ -1,3 +1,4 @@
+import { PAGE_MENU_SCHEMA, type AdditionalPage } from "../bookSelection.ts";
 /** Prompts and schemas for S2 module selection (WP-1.4, REQUIREMENTS §2.5). */
 import type { Claim } from "../../research/claimTypes.ts";
 import { formatClaims } from "./common.ts";
@@ -47,8 +48,9 @@ ${formatClaims(input.claims)}
 export const MODULE_REVIEW_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["additions", "removals"],
+  required: ["additions", "removals", "additional_pages"],
   properties: {
+    additional_pages: PAGE_MENU_SCHEMA.properties.additional_pages,
     additions: {
       type: "array",
       items: { type: "object", additionalProperties: false, required: ["module", "reason"], properties: { module: { type: "string" }, reason: { type: "string" } } },
@@ -61,6 +63,7 @@ export const MODULE_REVIEW_SCHEMA = {
 } as const;
 
 export interface ModuleReviewOutput {
+  additional_pages?: AdditionalPage[];
   additions: { module: string; reason: string }[];
   removals: { module: string; reason: string }[];
 }
@@ -97,7 +100,7 @@ export function moduleReviewPrompt(input: {
 # 判定されたジャンル
 ${input.genres.map((g) => `- ${g.label}（${g.slug}）: ${g.reason}`).join("\n") || "- （なし）"}
 
-# 常時オン（変更不可）
+# 初期プロファイル（固定ではなく全項目を削除できる）
 ${input.alwaysOn.map((m) => `- ${m} ${MODULE_DESCRIPTIONS[m]}`).join("\n")}
 
 # ジャンルで選ぶモジュール（現在の展開結果）
@@ -107,7 +110,8 @@ ${sel}
 - additions / removals に書けるのは上の「ジャンルで選ぶモジュール」の ID（${input.selectable.join(", ")}）だけ。
 - 作品の性質から見て、オフだが必要なものは additions、オンだが不要なものは removals に入れる。
 - reason は自分の言葉で80字以内。根拠になる claim の ID を含める。
-- 過不足が無ければ両方とも空配列。
+- 既存メニューにない理解に効く新ページはadditional_pagesで提案（slugは英小文字とハイフン、labelは日本語、reasonとclaim_refsを必須）。物語作品でも承認不要。不要なら空配列。
+- 過不足が無ければadditions/removalsは空配列。
 
 # 調査済み claim
 ${formatClaims(input.claims, 200)}

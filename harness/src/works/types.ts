@@ -1,3 +1,4 @@
+export type WorkKind = 'fiction' | 'nonfiction' | 'mixed';
 /** Work ledger types (REQUIREMENTS §4.6 work.json / INDEX.json title fields, §1.4). */
 
 export type AliasKind = "official_alt" | "common" | "input";
@@ -13,7 +14,7 @@ export interface WorkAlias {
   first_seen: string;
 }
 
-export type WorkMedium = "novel" | "manga" | "anime" | "film" | "drama" | "game" | "other";
+export type WorkMedium = "book" | "novel" | "manga" | "anime" | "film" | "drama" | "game" | "other";
 
 export interface WorkHistoryEntry {
   at: string;
@@ -36,7 +37,9 @@ export interface Work {
   title_reading_basis: "source" | "estimated";
   title_status: "confirmed" | "provisional";
   title_source_ids: string[];
+  kind_basis?: { reason: string; source_ids: string[] };
   aliases: WorkAlias[];
+  kind?: WorkKind | null;
   medium: string;
   creators: string[];
   genres: string[];
@@ -80,6 +83,7 @@ export interface IndexEntry {
   title_reading: string | null;
   title_status: "confirmed" | "provisional";
   aliases: WorkAlias[];
+  kind?: WorkKind | null;
   medium: string;
   creators: string[];
   genres: string[];
@@ -100,6 +104,7 @@ export const INDEX_FIELDS = [
   "title_reading",
   "title_status",
   "aliases",
+  "kind",
   "medium",
   "creators",
   "genres",

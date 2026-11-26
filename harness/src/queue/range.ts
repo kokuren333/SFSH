@@ -75,6 +75,9 @@ function parseItem(s: string): RangeItem | string {
   if ((m = s.match(new RegExp(`^全${N}話$`)))) return span("episode", 1, num(m[1]), "話");
   // volume / episode: 第N巻, N-M巻, 第N巻-第M巻, N巻-M巻
   for (const [unit, suf] of [
+    ["part", "部"],
+    ["chapter", "章"],
+    ["section", "節"],
     ["volume", "巻"],
     ["episode", "話"],
   ] as const) {
@@ -165,7 +168,7 @@ function itemKey(i: RangeItem): string {
   return `${i.unit}:${i.from}-${i.to}`;
 }
 
-const UNIT_ORDER: RangeUnit[] = ["installment", "whole", "season", "volume", "episode", "arc", "film"];
+const UNIT_ORDER: RangeUnit[] = ["installment", "whole", "part", "chapter", "section", "season", "volume", "episode", "arc", "film"];
 
 /** Canonical key of a parsed range (order-independent), used in the idempotency key (§4.4). */
 export function rangeKey(items: RangeItem[] | null | undefined): string {

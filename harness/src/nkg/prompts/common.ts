@@ -10,6 +10,7 @@ export const AUTHORING_RULES = `# 執筆規則（必ず守る）
 - 根拠は与えられた claim だけ。各要素の claim_refs に根拠 claim の ID を必ず入れる。分析・推論の要素は based_on に根拠ノード ID を入れる。
 - claim_refs も based_on も空の要素は採用されない（モデルの記憶だけを根拠にしない）。分からないことは作らずに省く。
 - claim_refs には、その要素を支える claim を漏れなく入れる（目安 3〜8 件）。同じ事実を別の出典の claim も述べていれば併記し、出典ティア（T1 公式 > T2 専門 > T3 百科事典型 > T4 ファンサイト）の高い claim を優先して含める。T4 の claim だけを根拠にした要素は信頼度が低く公開されない。
+- 非物語BKGでは、以下の物語専用語（人物・出来事・結末）は適用しない。canonは著者がその主張を述べた/当該資料がその事実を報告したという確認。主張自体の実証とは別。harness_interpretationはsfsh_analysis＋based_on。spoilerはnone。
 - epistemic: canon=作品内の確定事実／consensus=批評・受容で広く共有された見方／fan_theory=ファンの考察／sfsh_analysis=あなた自身の分析（based_on 必須）。
 - spoiler: none／mid（中盤の展開）／ending（結末に関わる）。phase_ref はフェーズ ID（不明なら null）。
 - 推論でつながる結びつき（出来事どうしの因果、人物どうしの関係など）で、1つの claim が直接は述べていないが複数の claim から導けるものは、省かずに epistemic: sfsh_analysis とし、based_on に両端のノード ID、claim_refs に両端の根拠 claim を入れる。claim が直接述べているものだけ canon／consensus にする。`;

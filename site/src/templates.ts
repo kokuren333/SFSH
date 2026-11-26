@@ -1,3 +1,4 @@
+import { kindLabel, bookWorkBody, bookNav, bookSummary } from "./book.ts";
 import { createHash } from 'node:crypto';
 import { html } from './html.ts';
 import type { Raw } from './html.ts';
@@ -68,7 +69,7 @@ function label(index: SiteInputIndex, axis: 'genres' | 'tags' | 'media', slug: s
   return index.vocab[axis].find(v => v.slug === slug)?.label || slug;
 }
 export function rows(items: CatalogItem[], p: string, index: SiteInputIndex): Raw {
-  return html`<ol class="work-list">${items.map(w => html`<li class="work-row" data-work-id="${w.work_id}" data-title="${w.title}" data-reading="${w.title_reading || w.title}" data-added="${w.first_published_at || ''}" data-updated="${w.updated_at || ''}"><a href="${p}${w.url}">${w.title}</a><p>${label(index, 'media', w.medium)} · ${w.creators.join('、')} · ${w.genres.map(g => label(index, 'genres', g)).join('、')}</p><p>対象範囲: ${w.coverage_label} · ${spoilerLabel(w.spoiler_max)}</p></li>`)}</ol>`;
+  return html`<ol class="work-list">${items.map(w => html`<li class="work-row" data-work-id="${w.work_id}" data-title="${w.title}" data-reading="${w.title_reading || w.title}" data-added="${w.first_published_at || ''}" data-updated="${w.updated_at || ''}"><a href="${p}${w.url}">${w.title}</a><p>${label(index, 'media', w.medium)} · ${w.creators.join('、')} · ${w.genres.map(g => label(index, 'genres', g)).join('、')}</p><p>対象範囲: ${w.coverage_label} · ${w.kind === "nonfiction" ? kindLabel(w.kind) : spoilerLabel(w.spoiler_max)}</p></li>`)}</ol>`;
 }
 export function indexBody(index: SiteInputIndex): Raw {
   const ordered = [...index.works].sort(compareReading);
@@ -101,6 +102,10 @@ export const subpages = { 'reverse-plot': 'リバースプロット', relations:
 export type Subpage = keyof typeof subpages;
 /** Pages without content are not emitted (matrix: has_matrix; people/events: CP-026 element lists). */
 export function hasSubpage(work: PublicWork, page: Subpage): boolean {
+  if (work.work.kind === "nonfiction") return false;
+  const selected=work.work.selected_modules;
+  const modules:Partial<Record<Subpage,string[]>>={relations:['M01'],'reverse-plot':['M02'],matrix:['M05'],people:['M06','M07'],events:['M03','M08','M09','M11'],themes:['M10'],context:['M12']};
+  if(selected&&modules[page]&&!modules[page]!.some(m=>selected.includes(m)))return false;
   const e = work.elements;
   if (page === 'matrix') return work.work.has_matrix;
   if (page === 'people') return e.motives.length + e.arcs.length > 0;
@@ -251,10 +256,11 @@ function synopsisSection(work: PublicWork, tokens: DesignTokens): Raw | null {
   return html`<section class="synopsis" aria-labelledby="synopsis-h"><h2 id="synopsis-h">あらすじ（全編・ネタバレ）</h2><p class="synopsis-warning" role="note"><strong>ネタバレ注意:</strong> このあらすじは物語の冒頭から結末までを明かします。調査で確認できた出来事の範囲で構成しています。<a href="#after-synopsis">あらすじを飛ばす</a></p>${s.intro.length ? html`<div class="synopsis-intro">${s.intro.map(para)}</div>` : null}${toc}${s.chapters.map(chapter)}<div class="evidence-grade">${eps.map(ep => badge(ep, tokens))}<span class="evidence-grade__text">${grade ? html`根拠要素の信頼度: ${grade}` : html`信頼度: 未付与`}</span></div></section>`;
 }
 export function workBody(work: PublicWork, index: SiteInputIndex, tokens: DesignTokens): Raw {
+  if (work.work.kind === "nonfiction") return bookWorkBody(work);
   const w = work.work;
   const essence = ESSENCE.filter(k => hasSubpage(work, k));
   const others = (Object.keys(subpages) as Subpage[]).filter(k => !ESSENCE.includes(k) && hasSubpage(work, k));
-  const head = html`<div class="work-head"><ul class="chips" aria-label="分類">${chip(label(index, 'media', w.medium), `../../media/${w.medium}/`)}${w.first_release_year ? chip(`${w.first_release_year}年`) : null}${w.genres.map(g => chip(label(index, 'genres', g), `../../genres/${g}/`))}</ul><p class="coverage">対象範囲: ${w.coverage_label} · ${spoilerLabel(w.spoiler_max)}</p></div>`;
+  const head = html`<div class="work-head"><ul class="chips" aria-label="分類">${chip(label(index, 'media', w.medium), `../../media/${w.medium}/`)}${w.kind ? chip(kindLabel(w.kind)) : null}${w.first_release_year ? chip(`${w.first_release_year}年`) : null}${w.genres.map(g => chip(label(index, 'genres', g), `../../genres/${g}/`))}</ul><p class="coverage">対象範囲: ${w.coverage_label} · ${w.kind === "nonfiction" ? kindLabel(w.kind) : spoilerLabel(w.spoiler_max)}</p></div>`;
   const nav = html`<section class="essence" aria-labelledby="essence-h"><h2 id="essence-h">この作品の核心</h2><nav aria-label="作品の分析"><ul class="nav-cards">${essence.map(k => navCard(work, k, ''))}</ul></nav></section>`;
   const facts: Raw[] = [];
   if (w.title_original) facts.push(html`<div class="fact"><dt>原題</dt><dd>${w.title_original}</dd></div>`);
@@ -265,7 +271,7 @@ export function workBody(work: PublicWork, index: SiteInputIndex, tokens: Design
   const info = html`<section class="card work-info"><h2>作品情報</h2><dl class="facts">${facts}</dl></section>`;
   const more = others.length ? html`<section class="more-pages" aria-labelledby="more-h"><h2 id="more-h">さらに読む</h2><ul class="nav-list" aria-label="そのほかのページ">${others.map(k => navRow(work, k, ''))}</ul></section>` : null;
   const gaps = work.gaps.length ? html`<details class="help"><summary>情報不足で載せていない観点（${work.gaps.length}件）</summary><ul>${work.gaps.map(g => html`<li>この観点は情報不足のため未掲載: ${g.aspect_label}</li>`)}</ul></details>` : null;
-  return html`${head}${nav}${synopsisSection(work, tokens)}<div class="overview" id="after-synopsis">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
+  return html`${head}${work.book ? html`${bookNav(work)}${work.work.kind === "mixed" ? html`${bookSummary(work)}<h2>物語として読む</h2>` : null}` : null}${nav}${synopsisSection(work, tokens)}<div class="overview" id="after-synopsis">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
 }
 export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignTokens, module: FigureModule | null): Raw {
   const crumbs = html`<nav class="breadcrumbs" aria-label="パンくず"><a href="../../../">トップ</a> › <a href="../../../works/">作品索引</a> › <a href="../">${work.work.title}</a> › ${subpages[page]}</nav>`;

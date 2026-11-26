@@ -24,7 +24,7 @@ if (form && results) {
       const shown = hits.filter(h => allowed.has(h.item.work_id));
       updateFacets(form, hits.map(h => h.item), selected, items);
       const prefix = document.querySelector<HTMLMetaElement>('meta[name="sfsh-root"]')!.content;
-      results.innerHTML = html`<p>${shown.length}件</p><ol class="work-list">${shown.map(h => html`<li class="work-row"><a href="${prefix}${h.item.url}">${h.item.title}</a><p>${({ novel: '小説', manga: '漫画', anime: 'アニメ', film: '映画', drama: 'ドラマ', game: 'ゲーム', other: 'その他' })[h.item.medium]} · ${h.item.coverage_label}</p>${h.alias ? html`<p>『${q}』に一致</p>` : null}</li>`)}</ol>${shown.length ? null : html`<p>一致する作品がありません。<a href="${prefix}works/">作品索引</a>・<a href="${prefix}genres/">ジャンル一覧</a>から探せます。</p>`}`.__raw;
+      results.innerHTML = html`<p>${shown.length}件</p><ol class="work-list">${shown.map(h => html`<li class="work-row"><a href="${prefix}${h.item.url}">${h.item.title}</a><p>${({ book: '書籍', novel: '小説', manga: '漫画', anime: 'アニメ', film: '映画', drama: 'ドラマ', game: 'ゲーム', other: 'その他' })[h.item.medium]} · ${h.item.coverage_label}</p>${h.alias ? html`<p>『${q}』に一致</p>` : null}</li>`)}</ol>${shown.length ? null : html`<p>一致する作品がありません。<a href="${prefix}works/">作品索引</a>・<a href="${prefix}genres/">ジャンル一覧</a>から探せます。</p>`}`.__raw;
       state = { ...state, q, filters: selected }; writeState(state);
       if (header) header.value = q;
     };

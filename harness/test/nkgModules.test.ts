@@ -68,7 +68,7 @@ test("selectModules: vocabulary filter, Haiku add/remove rules, sufficiency → 
     assert.deepEqual(f.haiku.applied.map((a) => `${a.action}:${a.module}`), ["add:M08", "remove:M11"]);
     assert.deepEqual(
       f.haiku.rejected.map((r) => `${r.action}:${r.module}:${r.why}`),
-      ["add:M02:always_on", "add:M99:invalid_module_id", "remove:M01:always_on"],
+      ["add:M02:already_enabled", "add:M99:invalid_module_id", "remove:M99:invalid_module_id"],
     );
 
     const sel = Object.fromEntries(f.module_selection.map((m) => [m.module, m]));

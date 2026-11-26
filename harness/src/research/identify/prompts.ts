@@ -1,6 +1,6 @@
 /** S0 identification prompts and OpenAI-strict output schemas (luna). */
 
-export const IDENTIFY_MEDIA = ["novel", "manga", "anime", "film", "drama", "game", "other"] as const;
+export const IDENTIFY_MEDIA = ["book", "novel", "manga", "anime", "film", "drama", "game", "other"] as const;
 export type IdentifyMedium = (typeof IDENTIFY_MEDIA)[number];
 
 export const SEARCH_SCHEMA = {
@@ -38,12 +38,15 @@ export const EXTRACT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "title_original", "title_reading", "medium", "creators", "first_release_year", "evidence", "aliases_seen"],
+        required: ["title", "title_original", "title_reading", "medium", "kind", "kind_reason", "kind_evidence", "creators", "first_release_year", "evidence", "aliases_seen"],
         properties: {
           title: { type: "string" },
           title_original: { type: ["string", "null"] },
           title_reading: { type: ["string", "null"] },
           medium: { type: "string", enum: [...IDENTIFY_MEDIA] },
+          kind: { type: ["string", "null"], enum: ["fiction", "nonfiction", "mixed", null] },
+          kind_reason: { type: "string" },
+          kind_evidence: { type: "array", items: { type: "object", additionalProperties: false, required: ["source_id", "quote"], properties: { source_id: { type: "string" }, quote: { type: "string" } } } },
           creators: { type: "array", items: { type: "string" } },
           first_release_year: { type: ["integer", "null"] },
           evidence: {
@@ -76,6 +79,9 @@ export const EXTRACT_SCHEMA = {
 } as const;
 
 export interface ExtractedCandidate {
+  kind?: "fiction" | "nonfiction" | "mixed" | null;
+  kind_reason?: string;
+  kind_evidence?: { source_id: string; quote: string }[];
   title: string;
   title_original: string | null;
   title_reading: string | null;
@@ -99,7 +105,7 @@ export function buildSearchPrompt(workQuery: string, mediumHint: string | null, 
     ...(installment != null ? [`対象: シリーズの第${installment}作目に当たる個別作品（続編）。第1作そのものではなく、第${installment}作目の正式題名・媒体・制作者・初出年が分かるページを探すこと。`] : []),
     "",
     "やること:",
-    `1. web_search を最大 ${maxSearches} 回まで使い、この作品の正式な題名・媒体・作者（制作者）・初出年・題名の読みを記載しているページを探す。`,
+    `1. web_search を最大 ${maxSearches} 回まで使い、この作品の正式な題名・媒体・種別（創作/非創作/混合）・作者（制作者）・初出年・題名の読みを記載しているページを探す。`,
     "   優先順: 公式サイト・出版社/製作会社のページ（T1）、国会図書館などの書誌データベース（T1）、新聞・専門誌（T2）、百科事典型サイト（T3）。",
     "   同名の別作品や媒体違い（原作小説とアニメ化など）があれば、それぞれの根拠ページも含める。",
     `2. 本文を取得すべきページを最大 ${maxSelections} 件選び、selections に入れる。url は検索結果に表示された URL をそのまま書く。検索結果に無い URL（記憶から書いた URL）は書かない。`,
@@ -138,7 +144,8 @@ export function buildExtractPrompt(workQuery: string, mediumHint: string | null,
     "",
     "各候補の項目:",
     "- title_reading: 題名の読みをひらがなで、語の切れ目に半角スペースを入れる（例: \"まほうしょうじょ まどか まぎか\"）。本文に読みが無くても推定して書いてよい。分からなければ null。",
-    "- medium: novel / manga / anime / film / drama / game / other のいずれか。",
+    "- medium: book / novel / manga / anime / film / drama / game / other。書籍一般はbook。小説と確認できた場合だけnovel。書籍というだけでnovelにしない。",
+    "- kind: 媒体と別にfiction（創作物語）/nonfiction（論説・教養・歴史・科学等）/mixed（物語的ノンフィクション、両方必要）。kind_reasonは根拠を自分の言葉で。kind_evidenceはその種別が確認できる出典の短い照合用抜粋。判定不能ならkind=null、推測でfictionへ倒さない。",
     "- creators: 本文に書かれた作者・原作者・監督・制作会社など。",
     "- first_release_year: 本文に書かれたその媒体での初出年（西暦の整数）。無ければ null。",
     "- evidence: その候補の題名を含む本文の短い抜き出し（quote は title の文字列をそのまま含むこと）と source_id。できるだけ多くの出典から。",

@@ -1,3 +1,4 @@
+export type WorkKind = 'fiction' | 'nonfiction' | 'mixed';
 /**
  * Shape of `works/<work_id>/gen/public.json` — the ONLY per-work input the site renderer reads
  * (REQUIREMENTS v1.3 §2.6, §6.3-2). Fixed by the orchestrator (CP-024, logs/m2/PLAN.md §2).
@@ -13,7 +14,7 @@
  * Erasable TypeScript only (types/interfaces). No runtime code in this file.
  */
 
-export type Medium = "novel" | "manga" | "anime" | "film" | "drama" | "game" | "other";
+export type Medium = "book" | "novel" | "manga" | "anime" | "film" | "drama" | "game" | "other";
 export type Epistemic = "canon" | "consensus" | "fan_theory" | "sfsh_analysis";
 export type Grade = "A" | "B" | "C" | "D";
 export type Spoiler = "none" | "mid" | "ending";
@@ -106,6 +107,7 @@ export interface VizTimeline {
 
 /** A block of page text written by Haiku and reviewed by Luna (S3). Plain text only (no markup). */
 export interface TextBlock {
+  stance?: "author_claim" | "fact" | "harness_interpretation";
   id: string;
   heading: string | null;
   paragraphs: string[];
@@ -297,12 +299,14 @@ export interface PublicGap {
 }
 
 export interface PublicWorkHeader {
+  selected_modules?: string[];
   work_id: string;
   title: string; // canonical title (4.6-7)
   title_original: string | null;
   title_reading: string | null;
   /** Attested aliases only (4.6: unattested inputs/typos are NOT shown on the work page). */
   aliases_display: string[];
+  kind?: WorkKind | null;
   medium: Medium;
   creators: { name: string; role: string | null }[];
   /** Controlled vocab slugs (harness/config/genres.json). */
@@ -319,7 +323,18 @@ export interface PublicWorkHeader {
   updated_at: string | null;
 }
 
+export interface PublicBookNode {
+  id:string; module:string; type:string; label:string; summary:string | null;
+  stance:'author_claim' | 'fact' | 'harness_interpretation'; section:string | null;
+  grade:Grade; epistemic:Epistemic; source_refs:string[];
+}
+export interface PublicBook {
+  nodes:PublicBookNode[];
+  edges:{id:string;from:string;to:string;relation:string;grade:Grade;source_refs:string[]}[];
+  pages:{module:string;slug:string;label:string;blocks:TextBlock[]}[];
+}
 export interface PublicWork {
+  book?: PublicBook;
   schema: "sfsh-public/1";
   work: PublicWorkHeader;
   phases: PublicPhase[];
@@ -367,6 +382,7 @@ export interface CatalogItem {
   title_reading: string | null;
   /** ALL aliases (text only), including unattested inputs/typos (§6.5 search target). */
   aliases: string[];
+  kind?: WorkKind | null;
   medium: Medium;
   creators: string[];
   genres: string[];

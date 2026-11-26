@@ -97,7 +97,7 @@ test("A15 evaluate: synopsis target, regression against the published copy, hold
   ev = evaluateConformance({ workDir: dir, candidate: thin, candidateKind: "public", baseline: base, cfg, rightsFromReport: true });
   const reg = ev.items.find((i) => i.item === "regression")!;
   assert.equal(reg.status, "shortfall");
-  assert.deepEqual(reg.measured.figures_lost, ["reverse_plot"]);
+  assert.deepEqual(reg.measured.figures_lost, [], "A17: unselected reverse plot is not a required figure");
   assert.ok(reg.shortfalls.some((s) => s.includes("公開要素数の後退")));
   assert.ok(reg.actions.includes("interp") && reg.actions.includes("refact"));
   const syn = ev.items.find((i) => i.item === "synopsis_chars")!;

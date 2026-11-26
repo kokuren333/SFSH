@@ -130,6 +130,8 @@ async function jobRework(args: string[]): Promise<number> {
     console.error(`no such work: ${workId}`);
     return 2;
   }
+  const existing=readWork(workDir);
+  if(!existing.kind || !existing.kind_basis?.source_ids.length){console.error(`種別未確認: ${workId}。先に job run --work "${existing.title}" --until identify で根拠付き再同定を行ってください。`);return 2;}
   const ui = args.indexOf("--until");
   const until = ui >= 0 && (STAGES as readonly string[]).includes(args[ui + 1] ?? "") ? (args[ui + 1] as StageName) : undefined;
   // AMENDMENT 16: a rework may carry a range (before A16 it was hardcoded to 全体, dropping the original job's range).

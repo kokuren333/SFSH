@@ -162,6 +162,7 @@ export function makeFakeModels(base: string): FakeModels {
               title_original: null,
               title_reading: READING,
               medium: "novel",
+              kind: "fiction", kind_reason: "公式が長編小説と明記", kind_evidence:[{source_id:sourceIdFor(u(PAGES.official.path)),quote:`『${TITLE}』は${CREATOR}による長編小説`}],
               creators: [CREATOR],
               first_release_year: 2001,
               evidence: [
@@ -236,7 +237,7 @@ export function makeFakeModels(base: string): FakeModels {
           ],
         };
       case "s2.modules.review":
-        return { additions: [], removals: [] };
+        return { additions: [], removals: [], additional_pages: [] };
       case "s2.phases.review":
       case "s2.fact.review":
         return { findings: [] };

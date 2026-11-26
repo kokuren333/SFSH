@@ -5,6 +5,7 @@ export const OWN_WORDS_RULE = "事実・関係・因果を自分の言葉で主�
 
 /** Aspect vocabulary shown to the models (REQUIREMENTS §2.4). */
 export const ASPECT_GUIDE = [
+  "B01=中心命題 B02=論証 B03=概念 B04=事例・証拠 B05=章の論理 B06=著者と文脈 B07=反論・批判 B08=前提 B09=歴史時系列 B10=未解決・留保。著者の主張は必ず帰属を明記し、事実の実証と混同しない",
   "bibliographic = 書誌（作者・出版社/製作・初出年・巻数/話数・媒体）",
   "title = 正式名称・別名・原題",
   "genre = ジャンル・形式",
@@ -25,6 +26,7 @@ export const ASPECT_GUIDE = [
 
 export interface WorkBrief {
   title: string;
+  kind?: string | null;
   creators: string[];
   medium: string;
   first_release: string | null;
@@ -52,16 +54,18 @@ export function scopeText(range: readonly RangeLike[] | null | undefined): strin
   if (items.length === 0) return null;
   const labels = items.map((i) => i.label).join("・");
   const lines = [
-    `指定範囲「${labels}」のみが対象。それ以外の部分（範囲の前後の展開、他の編・巻・話・シーズン、続編・後日談、範囲外で判明する設定・人物の最終的な変化・作品全体の結末）は対象外であり、検索・抽出・記述のいずれにも含めない。`,
+    `指定範囲「${labels}」のみが対象。それ以外の部分（範囲の前後の展開、他の部・章・節・編・巻・話・シーズン、続編・後日談、範囲外で判明する設定・人物の最終的な変化・作品全体の結末）は対象外であり、検索・抽出・記述のいずれにも含めない。`,
   ];
   if (items.some((i) => i.unit === "arc")) lines.push("編の範囲は、その編の発端から決着までとし、作品全体の結末と混同しない。範囲の終端はその編の決着である。");
-  if (items.some((i) => i.unit === "volume" || i.unit === "episode" || i.unit === "season")) lines.push("範囲の境界（巻数・話数・シーズン）が曖昧な情報は、範囲内と確認できるものだけを対象にする。");
+  if (items.some((i) => ["part", "chapter", "section"].includes(i.unit) || i.unit === "volume" || i.unit === "episode" || i.unit === "season")) lines.push("範囲の境界（巻数・話数・シーズン）が曖昧な情報は、範囲内と確認できるものだけを対象にする。");
   return lines.join("\n");
 }
 
 export function workLine(w: WorkBrief): string {
   const parts = [`題名: ${w.title}`, `作者/製作: ${w.creators.join("、") || "不明"}`, `媒体: ${w.medium}`];
   if (w.first_release) parts.push(`初出: ${w.first_release}`);
+  if (w.kind) parts.push(`種別: ${w.kind}`);
+  if (w.kind === "nonfiction") parts.push("BKG: 論証・概念・根拠・章の論理が対象。物語の筋・結末・登場人物へ変換しない。著者の主張/事実/解釈を分離");
   const line = parts.join(" / ");
   return w.scope ? `${line}\n対象範囲: ${w.scope}` : line;
 }

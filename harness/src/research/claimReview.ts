@@ -1,3 +1,4 @@
+import { readJson } from "../nkg/io.ts";
 import { isoLocal } from "../model/callLog.ts";
 import { stageWidth } from "../util/parallel.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
@@ -165,7 +166,7 @@ export async function reviewClaims(ctx: StageContext, opts: ReviewClaimsOptions 
       const hres = await ctx.haiku.call({
         task: "s1.claims.review",
         prompt:
-          buildReviewPrompt(workTitle, items, covered, scopeText(ctx.range)) +
+          buildReviewPrompt(workTitle, items, covered, [scopeText(ctx.range),readJson<{kind?:string}>(ctx.workDir,"work.json",{}).kind === "nonfiction" ? "非物語BKG。著者の主張と事実の実証を混同していればmisclassified、範囲外の論証はoverreach。" : null].filter(Boolean).join("\n")||null) +
           priorClaimBlock(
             batch.map((c) => ({ claim_id: c.claim_id, history: history.get(c.claim_id) ?? [] })),
             round,

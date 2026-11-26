@@ -71,6 +71,7 @@ export function genNkg(): Nkg {
       publish_mode: "Public",
       rights: { state: "unchecked", copyright_status: "in_copyright", holder_policy_note: "", source_ids: [] },
       module_selection: [
+        { module: "M10", weight: 1, enabled: true, reason: "theme fixture is selected" },
         { module: "M01", weight: 1, enabled: true, reason: "always_on" },
         { module: "M02", weight: 1, enabled: true, reason: "always_on" },
         { module: "M04", weight: 1, enabled: true, reason: "genre:mystery" },

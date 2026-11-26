@@ -1,3 +1,4 @@
+import { BOOK_MENU } from "./bookMenu.ts";
 /**
  * Model-facing element shapes for S2 authoring (WP-1.5).
  *
@@ -27,7 +28,10 @@ const ns = { type: ["string", "null"] };
 const sArr = { type: "array", items: { type: "string" } };
 const en = (...v: string[]) => ({ type: "string", enum: v });
 
-export const SPECS: Record<NodeType | EdgeType, ElementSpec> = {
+export const SPECS = {
+  ...Object.fromEntries([...BOOK_MENU, { module: "B11", type: "BookTopic", label: "追加の視点", slug: "additional", guide: "作品理解に効く追加の視点。必要な場合だけ採用" }].map((m,i) => [m.type, { kind: m.type, edge: false, key: m.type.toLowerCase(), module: m.module, idPrefix: `bk${i+1}_`, fields: { stance: en("author_claim", "fact", "harness_interpretation"), section: ns }, guide: m.guide + "。stance: 著者の主張/出典で確認できる事実/ハーネスの解釈を必ず区別。著者が使う事例を事実の証明にしない。sectionは出典で確認できた部・章・節または論点名。原文引用なし。" }])),
+  ArgumentLink: { kind: "ArgumentLink", edge: true, key: "argument_links", module: "B02", idPrefix: "bal", fields: { relation: s }, guide: "論拠→主張、事例→論拠、反例→主張。relation は supports/qualifies/challenges 等を日本語で簡潔に。論証のリンクを必ず作る。ハーネスが導く関係はsfsh_analysis" },
+  ConceptLink: { kind: "ConceptLink", edge: true, key: "concept_links", module: "B03", idPrefix: "bcl", fields: { relation: s }, guide: "概念→概念の定義的・対立的・依存関係。リンクで概念マップにする" },
   // ---- fact layer ----
   Event: { kind: "Event", edge: false, key: "events", module: "M03", idPrefix: "ev", fields: { story_order: { type: ["integer", "null"] }, disclosure_phase: ns }, guide: "物語の主要な出来事。転換点を中心に、序盤から結末まで時系列で欠けなく（範囲1単位あたり12〜20件程度、各フェーズに3件以上。粗筋の claim〔aspects に plot〕が多ければそれを主な根拠にする）。場面の連続にしない。story_order=作中の実際の時系列順（1始まり）、disclosure_phase=読者に明かされるフェーズID（時系列の二重化を扱わないときは null）" },
   Causes: { kind: "Causes", edge: true, key: "causes", module: "M03", idPrefix: "cs", fields: { kind: en("causes", "enables", "motivates", "prevents") }, guide: "Event→Event の因果。from=原因、to=結果。主要な Event がばらばらに孤立しないよう、つながる因果をすべて作る（直接言えなければ sfsh_analysis）" },
@@ -77,7 +81,7 @@ export const SPECS: Record<NodeType | EdgeType, ElementSpec> = {
     guide: "解釈の分岐。topic ごとに立場（positions）を並べ、canon/consensus/fan_theory を必ず分ける。各立場に claim_refs",
   },
   Quiz: { kind: "Quiz", edge: false, key: "quizzes", module: "extra", idPrefix: "qz", fields: { question: s, answer: s, reasoning_refs: sArr, quiz_type: en("causal", "motive", "counterfactual") }, guide: "理解度テスト（最大10問）。因果・動機・反実仮想だけ。固有名や数値を当てる暗記問題は禁止。reasoning_refs に推論の根拠ノード ID（既存ノードの ID。claim ID ではない）" },
-};
+} as unknown as Record<NodeType | EdgeType, ElementSpec>;
 
 const COMMON_NODE: Json = {
   id: s,
@@ -135,8 +139,13 @@ export const INTERP_GROUPS: CallGroup[] = [
   { name: "extras", kinds: ["IconicMoment", "Interpretation", "Quiz"] },
 ];
 
-export const FACT_MODULES: ModuleId[] = ["M01", "M03", "M04", "M05", "M08", "M09", "M12"];
-export const INTERP_MODULES: ModuleId[] = ["M02", "M06", "M07", "M10", "M11"];
+export const BOOK_GROUPS: CallGroup[] = [
+  { name: "book_core", kinds: ["Thesis", "Concept", "Outline", "AuthorContext", "Evidence", "Chronology"] },
+  { name: "book_argument", kinds: ["Argument", "Assumption", "Criticism", "OpenQuestion", "BookTopic", "ArgumentLink", "ConceptLink"] },
+];
+
+export const FACT_MODULES: ModuleId[] = ["B01", "B03", "B04", "B05", "B06", "B09","M01", "M03", "M04", "M05", "M08", "M09", "M12"];
+export const INTERP_MODULES: ModuleId[] = ["B02", "B07", "B08", "B10", "B11","M02", "M06", "M07", "M10", "M11"];
 
 /** Specs of a group whose module is enabled ("extra" is always on). */
 export function enabledSpecs(group: CallGroup, enabled: Set<string>): ElementSpec[] {

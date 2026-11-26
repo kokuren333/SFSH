@@ -1,3 +1,4 @@
+import { BOOK_MENU } from "./bookMenu.ts";
 /**
  * Source of truth for harness/schema/nkg.schema.json (REQUIREMENTS v1.3 §2.2–2.4).
  * The JSON file is generated from this module (`npx tsx harness/src/nkg/writeSchema.ts`) and a test keeps them in sync.
@@ -6,8 +7,9 @@
  * original text. Every object is closed (additionalProperties:false) so such fields are schema violations.
  */
 
-export const MODULE_IDS = ["M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12"] as const;
+export const MODULE_IDS = ["M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12", "B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09", "B10", "B11"] as const;
 export const NODE_TYPES = [
+  "Thesis", "Argument", "Concept", "Evidence", "Outline", "AuthorContext", "Criticism", "Assumption", "Chronology", "OpenQuestion", "BookTopic",
   "Character",
   "Faction",
   "Event",
@@ -26,6 +28,7 @@ export const NODE_TYPES = [
   "Quiz",
 ] as const;
 export const EDGE_TYPES = [
+  "ArgumentLink", "ConceptLink",
   "Relation",
   "Causes",
   "Knows",
@@ -86,7 +89,8 @@ function edgeDef(type: string, props: Json, overrides: Json = {}): Json {
   };
 }
 
-const NODE_FIELDS: Record<(typeof NODE_TYPES)[number], Json> = {
+const NODE_FIELDS = {
+  ...Object.fromEntries([...BOOK_MENU.map(m => m.type), "BookTopic"].map(t => [t, { stance: { enum: ["author_claim", "fact", "harness_interpretation"] }, section: nstr }])),
   Character: {},
   Faction: {},
   Event: {
@@ -146,6 +150,8 @@ const NODE_FIELDS: Record<(typeof NODE_TYPES)[number], Json> = {
 };
 
 const EDGE_FIELDS: Record<(typeof EDGE_TYPES)[number], { props: Json; overrides?: Json }> = {
+  ArgumentLink: { props: { relation: str() } },
+  ConceptLink: { props: { relation: str() } },
   Relation: {
     props: {
       kind: str({ minLength: 1 }),
@@ -268,7 +274,7 @@ export function buildNkgSchema(): Json {
       additionalProperties: false,
       required: ["unit", "from", "to", "label"],
       properties: {
-        unit: { enum: ["volume", "episode", "arc", "season", "whole", "film", "installment"] },
+        unit: { enum: ["volume", "episode", "arc", "season", "whole", "film", "installment", "part", "chapter", "section"] },
         from: { type: ["integer", "null"] },
         to: { type: ["integer", "null"] },
         label: str(),
@@ -313,7 +319,8 @@ export function buildNkgSchema(): Json {
         title: str({ minLength: 1 }),
         title_alt: { type: "array", items: str() },
         creators: { type: "array", items: ref("creator") },
-        medium: { enum: ["novel", "manga", "anime", "film", "drama", "game", "other"] },
+        kind: { enum: ["fiction", "nonfiction", "mixed"] },
+        medium: { enum: ["book", "novel", "manga", "anime", "film", "drama", "game", "other"] },
         bibliographic: {
           type: "object",
           additionalProperties: false,
@@ -355,7 +362,7 @@ export function buildNkgSchema(): Json {
     },
   };
 
-  for (const t of NODE_TYPES) definitions[`node_${t}`] = nodeDef(t, NODE_FIELDS[t]);
+  for (const t of NODE_TYPES) definitions[`node_${t}`] = nodeDef(t, (NODE_FIELDS as Record<string, Json>)[t]);
   for (const t of EDGE_TYPES) definitions[`edge_${t}`] = edgeDef(t, EDGE_FIELDS[t].props, EDGE_FIELDS[t].overrides);
 
   definitions.node = {

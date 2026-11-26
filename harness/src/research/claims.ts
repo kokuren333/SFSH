@@ -1,3 +1,4 @@
+import { readJson } from "../nkg/io.ts";
 import type { StageContext, StageResult } from "../job/context.ts";
 import { stageWidth } from "../util/parallel.ts";
 import { claimIdFor, isClaimAspect, nextClaimNumber, type Claim, type ClaimDropReason, type Epistemic, type PhaseHint, type Spoiler } from "./claimTypes.ts";
@@ -146,7 +147,7 @@ export async function extractClaims(ctx: StageContext, opts: ExtractClaimsOption
     try {
       const res = await ctx.luna.call({
         task: batch.plot ? "s1.claims.plot" : "s1.claims",
-        prompt: buildClaimsPrompt(workTitle, batch.items, { plot: batch.plot, focus: opts.focus, scope: scopeText(ctx.range) }),
+        prompt: buildClaimsPrompt(workTitle, batch.items, { plot: batch.plot, focus: opts.focus, scope: [scopeText(ctx.range), readJson<{kind?:string}>(ctx.workDir,"work.json",{}).kind === "nonfiction" ? "非物語BKG。著者の主張は帰属を明示。事実の実証と混同しない。B01〜B10の観点で抽出し、plot/登場人物/結末を作らない。spoilerはnone。" : null].filter(Boolean).join("\n") || null }),
         schema: CLAIMS_SCHEMA,
         tools: "none",
         jobId: ctx.jobId,

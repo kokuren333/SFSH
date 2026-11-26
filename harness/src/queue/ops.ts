@@ -66,6 +66,8 @@ export function clarifyText(job: JobRequest, info: Omit<ClarifyInfo, "message">,
       return `聞き返し: ${job.job_id}「${job.work_query}」の範囲「${job.range_raw}」を解釈できません${rangeReason ? `（${rangeReason}）` : ""}。範囲（例: 全体／3巻／1-3巻／5話／第2シーズン／「◯◯」編／劇場版／2作目）を答えてください。回答: ${
         job.origin === "discord" ? `/sfsh answer job_id:${job.job_id} range:<範囲>` : `sfsh answer ${job.job_id} --range <範囲>`
       }`;
+    case "kind_unknown":
+      return `聞き返し: ${job.job_id} 種別（fiction/nonfiction/mixed）の根拠を確認できません。書誌出典を添えた作品名で再同定してください。${how}`;
     case "no_candidates":
       return `聞き返し: ${job.job_id}「${job.work_query}」に当たる作品を確認できませんでした。正式な題名や媒体を添えて答えてください。回答: ${how}`;
     case "no_reading":

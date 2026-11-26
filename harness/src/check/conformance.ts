@@ -144,6 +144,8 @@ export function publicShape(pw: PublicWork): PublicShape {
   };
   pw.viz.reverse_plot.trees.forEach(walk);
   const kinds: Record<string, { id: string }[]> = {
+    book_nodes: pw.book?.nodes ?? [],
+    book_edges: pw.book?.edges ?? [],
     characters: pw.viz.relations.characters,
     relations: pw.viz.relations.relations,
     factions: pw.viz.relations.factions ?? [],
@@ -274,6 +276,7 @@ export function currentFactCoverageOf(workDir: string): FactCoverage | null {
 }
 
 function evalSynopsis(inp: EvalInput, mode: ConformanceMode): ItemResult {
+  if (inp.candidate.work.kind === "nonfiction") return {item:"synopsis_chars",mode,status:"not_measured",goal:"非物語は要旨と論理要約",measured:{},shortfalls:[],actions:[],note:"物語のあらすじ字数は適用しない"};
   const target = synopsisTarget(inp.candidate);
   const s = synopsisChars(inp.candidate);
   const goal = `あらすじ ${target[0].toLocaleString("en")}字以上（規模別の目安 ${target[0].toLocaleString("en")}〜${target[1].toLocaleString("en")}字、REQUIREMENTS 3.2）`;
@@ -294,6 +297,12 @@ function evalSynopsis(inp: EvalInput, mode: ConformanceMode): ItemResult {
 }
 
 function evalCoverage(inp: EvalInput, mode: ConformanceMode): ItemResult {
+  const modules=enabledModules(inp.workDir);
+  if (inp.candidate.work.kind === "nonfiction") {
+    const missing=[...modules].filter(m=>m.startsWith("B")&&!(inp.candidate.book?.nodes.some(n=>n.module===m)));
+    return {item:"coverage",mode,status:missing.length?"shortfall":"pass",goal:"選択したBKGモジュールの公開根拠がある",measured:{selected:[...modules],missing},shortfalls:missing.map(m=>`${m}: 公開可能な論点がない`),actions:missing.length?["refact"]:[]};
+  }
+  if (!modules.has("M03")) return {item:"coverage",mode,status:"not_measured",goal:"選択モジュールのカバレッジ",measured:{},shortfalls:[],actions:[],note:"出来事モジュール未選択"};
   const goal = "カバレッジ目標（1.3）: 各フェーズの出来事 3 以上・最後のフェーズ 3 以上かつ結末の出来事 1 以上・主要人物ごとの出来事 2 以上（事実層）";
   const fact = currentFactCoverageOf(inp.workDir);
   if (!fact) return { item: "coverage", mode, status: "not_measured", goal, measured: {}, shortfalls: [], actions: [], note: "nkg/layers/fact.json または nkg/phases.json がない" };
@@ -326,15 +335,20 @@ function evalFigures(inp: EvalInput, mode: ConformanceMode, shape: PublicShape):
   const goal = `選択モジュールの図: ${want.map(([m, f]) => `${m}→${FIGURE_JA[f]}`).join("・") || "（図を持つモジュールの選択なし）"}`;
   if (!mods.size) return { item: "figures", mode, status: "not_measured", goal, measured: {}, shortfalls: [], actions: [], note: "nkg/nkg.json の module_selection がない" };
   const missing = want.filter(([, f]) => !shape.figures[f]);
+  const bookMissing=[...mods].filter(m=>["B02","B03"].includes(m)&&!(inp.candidate.book?.edges.some(e=>{
+    const nodes=inp.candidate.book!.nodes;
+    return nodes.some(n=>n.id===e.from&&n.module===m)||nodes.some(n=>n.id===e.to&&n.module===m);
+  })));
+  const bookShort=bookMissing.map(m=>`図がない: ${m} を選択しているが論点間の接続がない`);
   const actions = new Set<RepairAction>();
   for (const [m] of missing) actions.add(m === "M02" ? "interp" : "refact");
   return {
     item: "figures",
     mode,
-    status: missing.length ? "shortfall" : "pass",
+    status: missing.length || bookMissing.length ? "shortfall" : "pass",
     goal,
     measured: { enabled_modules: [...mods].sort(), figures: shape.figures, trees: shape.by_kind.trees, matrix_secrets: shape.by_kind.matrix_secrets, characters: shape.by_kind.characters, relations: shape.by_kind.relations },
-    shortfalls: missing.map(([m, f]) => `図がない: ${m} を選択しているが${FIGURE_JA[f]}が公開射影にない`),
+    shortfalls: [...bookShort, ...missing.map(([m, f]) => `図がない: ${m} を選択しているが${FIGURE_JA[f]}が公開射影にない`)],
     actions: [...actions],
   };
 }
@@ -343,7 +357,8 @@ function evalRegression(inp: EvalInput, mode: ConformanceMode, shape: PublicShap
   const ratio = inp.cfg.regression.max_element_drop_ratio;
   const goal = `前の公開版から後退しない: 図を失わない・公開要素数の減少 ${Math.round(ratio * 100)}% 以内`;
   if (!base || !inp.baseline) return { item: "regression", mode, status: "not_measured", goal, measured: {}, shortfalls: [], actions: [], note: `前の公開版の写し（${PUBLISHED_COPY}）がない（初回公開、または A15 より前に公開されたまま保存されていない）` };
-  const lost = FIGURES.filter((f) => base.figures[f] && !shape.figures[f]);
+  const selected=enabledModules(inp.workDir);
+  const lost = FIGURES.filter((f) => base.figures[f] && !shape.figures[f] && Object.entries(MODULE_FIGURE).some(([m,key])=>key===f&&selected.has(m)));
   const drop = base.elements > 0 ? (base.elements - shape.elements) / base.elements : 0;
   const deltas: Record<string, { before: number; after: number }> = {};
   for (const k of new Set([...Object.keys(base.by_kind), ...Object.keys(shape.by_kind)])) {

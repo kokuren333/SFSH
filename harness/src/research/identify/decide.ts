@@ -24,6 +24,9 @@ export interface VerifiedAlias {
 }
 
 export interface VerifiedCandidate {
+  kind?: "fiction" | "nonfiction" | "mixed" | null;
+  kind_reason?: string;
+  kind_evidence?: VerifiedEvidence[];
   title: string;
   title_original: string | null;
   title_reading: string | null;
@@ -100,7 +103,13 @@ export function verifyCandidates(raw: ExtractedCandidate[], sources: Map<string,
       dropped.push({ title, medium: c.medium, reason: "no_verified_evidence" });
       continue;
     }
+    const kindEvidence = (c.kind_evidence ?? []).flatMap(e => {
+      const src = sources.get(e.source_id); const hit = src ? findQuote(src.text, e.quote) : null;
+      return hit ? [{ source_id:e.source_id, offset:hit.offset, length:hit.length }] : [];
+    });
+    const kind = ["fiction", "nonfiction", "mixed"].includes(c.kind ?? "") && kindEvidence.length && c.kind_reason?.trim() ? c.kind : null;
     kept.push({
+      kind, kind_reason: c.kind_reason ?? "", kind_evidence: kindEvidence,
       title,
       title_original: c.title_original?.trim() || null,
       title_reading: normalizeReading(c.title_reading),
@@ -133,6 +142,8 @@ export function groupCandidates(list: VerifiedCandidate[]): VerifiedCandidate[] 
         if (a.kind === "official_alt") prev.kind = "official_alt";
       }
     }
+    if (g.kind && c.kind && g.kind !== c.kind) { g.kind = null; g.kind_reason = "conflicting kind evidence"; }
+    g.kind_evidence = [...(g.kind_evidence ?? []), ...(c.kind_evidence ?? [])];
     g.creators = uniq([...g.creators, ...c.creators]);
     g.title_original ??= c.title_original;
     g.title_reading ??= c.title_reading;
@@ -144,6 +155,9 @@ export function groupCandidates(list: VerifiedCandidate[]): VerifiedCandidate[] 
 }
 
 const MEDIUM_SYNONYMS: Record<string, IdentifyMedium> = {
+  "書籍": "book",
+  "本": "book",
+  "小説": "novel",
   movie: "film",
   cinema: "film",
   comic: "manga",

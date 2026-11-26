@@ -142,13 +142,14 @@ export function cannedS2(req: ModelRequest): unknown {
       };
     case "s2.modules.review":
       return {
+        additional_pages: [],
         additions: [
           { module: "M08", reason: "制度が効く (c0022)" },
           { module: "M02", reason: "常時オン" },
           { module: "M99", reason: "不正" },
         ],
         removals: [
-          { module: "M01", reason: "外せない" },
+          { module: "M99", reason: "不正な除外" },
           { module: "M11", reason: "感情曲線は弱い" },
         ],
       };

@@ -1,3 +1,5 @@
+import { writeBookPages } from "../gen/book.ts";
+import { parseRange } from "../queue/range.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { isoLocal } from "../model/callLog.ts";
@@ -185,6 +187,8 @@ export function nextJobId(jobsDir: string, now: Date): string {
 
 /** Minimal range parsing for M1 (full grammar = WP-4.3 in M4). Unparsed input is kept in range_raw. */
 export function parseRangeLite(raw: string): StageContext["range"] {
+  const parsed = parseRange(raw);
+  if (parsed.ok && parsed.items.some(i=>["part","chapter","section"].includes(i.unit))) return parsed.items;
   const s = raw.normalize("NFKC").trim();
   if (s === "" || s === "全体" || s === "whole") return [{ unit: "whole", from: null, to: null, label: "全体" }];
   let m = s.match(/^全?(\d+)話$/);
@@ -246,6 +250,7 @@ function workBrief(workDir: string, range?: StageContext["range"]) {
     title: w.title,
     creators: (w.creators ?? []).map((c: unknown) => (typeof c === "string" ? c : String((c as { name?: string }).name ?? ""))),
     medium: w.medium,
+    kind: w.kind,
     first_release: w.first_release_year != null ? String(w.first_release_year) : null,
     scope: scopeText(range),
   };
@@ -264,6 +269,7 @@ export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Pro
       return async (ctx) => {
         // AMENDMENT 11: the page text and the long synopsis are written in parallel (both read the projection only
         // and write separate files); ctx.writeParts selects one of them (regen --parts).
+        if (readWork(ctx.workDir).kind === "nonfiction") return writeBookPages(ctx);
         const parts = ctx.writeParts ?? ["pages", "synopsis"];
         // A14: wait for both before failing, so a retry of this stage never overlaps a still-running half
         const settled = await Promise.allSettled([parts.includes("pages") ? writePages(ctx) : null, parts.includes("synopsis") ? writeSynopsis(ctx) : null]);
@@ -271,6 +277,7 @@ export function offlineStage(name: OfflineStageName): (ctx: StageContext) => Pro
         if (failedHalf) throw failedHalf.reason;
         const results = settled.map((x) => (x as PromiseFulfilledResult<StageResult | null>).value);
         const done = results.filter((x): x is StageResult => !!x);
+        if (readWork(ctx.workDir).kind === "mixed" || fs.existsSync(path.join(ctx.workDir,"nkg/page_menu.json"))) done.push(await writeBookPages(ctx));
         const r: StageResult = { outputs: done.flatMap((x) => x.outputs), metrics: Object.assign({}, ...done.map((x) => x.metrics)), warnings: done.flatMap((x) => x.warnings) };
         try {
           summarizeReviews(ctx.workDir, ctx.now()); // include gen/reviews/*.json in review_summary + work.json review_stats (3.3-4)
@@ -304,7 +311,7 @@ function defaultStage(name: Exclude<StageName, "identify">, st: JobState, overri
       return (ctx) =>
         runSearch(ctx, {
           round: 1,
-          aspects: ROUND1_ASPECTS,
+          aspects: readWork(ctx.workDir).kind === "nonfiction" ? ["bibliographic","B01","B02","B03","B04","B05","B06","B07","B08","B09","B10"] : ROUND1_ASPECTS,
           work: workBrief(ctx.workDir, ctx.range),
           maxSearches: 14,
           instructionUrls: st.request.instruction_urls,
