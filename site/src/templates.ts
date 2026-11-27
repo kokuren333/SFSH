@@ -1,4 +1,5 @@
 import { kindLabel, bookWorkBody, bookNav, bookSummary } from "./book.ts";
+import { sourceCards, sourceFooter } from './sources.ts';
 import { createHash } from 'node:crypto';
 import { html } from './html.ts';
 import type { Raw } from './html.ts';
@@ -271,7 +272,7 @@ export function workBody(work: PublicWork, index: SiteInputIndex, tokens: Design
   const info = html`<section class="card work-info"><h2>作品情報</h2><dl class="facts">${facts}</dl></section>`;
   const more = others.length ? html`<section class="more-pages" aria-labelledby="more-h"><h2 id="more-h">さらに読む</h2><ul class="nav-list" aria-label="そのほかのページ">${others.map(k => navRow(work, k, ''))}</ul></section>` : null;
   const gaps = work.gaps.length ? html`<details class="help"><summary>情報不足で載せていない観点（${work.gaps.length}件）</summary><ul>${work.gaps.map(g => html`<li>この観点は情報不足のため未掲載: ${g.aspect_label}</li>`)}</ul></details>` : null;
-  return html`${head}${work.book ? html`${bookNav(work)}${work.work.kind === "mixed" ? html`${bookSummary(work)}<h2>物語として読む</h2>` : null}` : null}${nav}${synopsisSection(work, tokens)}<div class="overview" id="after-synopsis">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
+  return html`${head}${work.book ? html`${work.work.kind === "mixed" ? html`${bookSummary(work)}${bookNav(work)}<h2>物語として読む</h2>` : bookNav(work)}` : null}${nav}${synopsisSection(work, tokens)}<div class="overview" id="after-synopsis">${work.pages.overview.map(b => block(b, tokens, work))}</div>${info}${more}${sourceFooter("./")}${legend(tokens)}${gaps}<p class="disclaimer">非公式・独自分析サイト</p>`;
 }
 export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignTokens, module: FigureModule | null): Raw {
   const crumbs = html`<nav class="breadcrumbs" aria-label="パンくず"><a href="../../../">トップ</a> › <a href="../../../works/">作品索引</a> › <a href="../">${work.work.title}</a> › ${subpages[page]}</nav>`;
@@ -285,10 +286,7 @@ export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignToken
   } else if (page === 'events') {
     body = eventsBody(work, tokens);
   } else if (page === 'sources') {
-    body = html`<ol class="sources">${work.sources.map(s => {
-      const valid = /^https?:\/\/[^\s]+$/i.test(s.url);
-      return html`<li><h2>${s.title}</h2><p>発行者: ${s.publisher || '不明'}</p><p>${valid ? html`<a href="${s.url}" rel="nofollow noopener">${s.url}</a>` : html`${s.url}`}</p><p>参照日: ${s.accessed} · ${s.tier}</p>${s.license ? html`<p>${s.license}</p>` : null}</li>`;
-    })}</ol>`;
+    body = sourceCards(work);
   } else if (page === 'quiz') {
     body = html`${work.pages.quiz.map(q => html`<section>${q.spoiler === 'mid' ? html`<p class="spoiler-label">中盤のネタバレ</p>` : null}<h2>${q.question}</h2><p class="evidence-grade">${evidence(work, q.based_on).length ? evidence(work, q.based_on).map(e => badge(e.epistemic, tokens, e.grade)) : html`認識区分・信頼度: 未付与`}</p><details class="spoiler"><summary>${q.spoiler === 'ending' ? '結末に触れる内容（クリックで表示）' : '答えと解説'}</summary><p>${q.answer}</p><p>${q.explanation}</p></details></section>`)}`;
   } else if (page === 'interpretations') {
@@ -299,5 +297,5 @@ export function subpageBody(work: PublicWork, page: Subpage, tokens: DesignToken
   }
   const siblings = (Object.keys(subpages) as Subpage[]).filter(k => k !== page && hasSubpage(work, k));
   const sib = html`<section class="sibling-pages" aria-labelledby="sib-h"><h2 id="sib-h">この作品のほかのページ</h2><nav aria-label="この作品のほかのページ"><ul class="chips">${chip('作品ページに戻る', '../')}${siblings.map(k => chip(subpages[k], `../${k}/`))}</ul></nav></section>`;
-  return html`${crumbs}<p class="coverage">対象範囲: ${work.work.coverage_label} · ${spoilerLabel(work.work.spoiler_max)}</p>${body}${sib}${legend(tokens)}`;
+  return html`${crumbs}<p class="coverage">対象範囲: ${work.work.coverage_label} · ${spoilerLabel(work.work.spoiler_max)}</p>${body}${sib}${page === "sources" ? null : sourceFooter("../")}${legend(tokens)}`;
 }
