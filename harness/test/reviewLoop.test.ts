@@ -168,6 +168,7 @@ test("buildFactLayer: unresolved copied_phrase deletes the element; too_concrete
     makeFixtureWork(dir);
     const calls: FakeCall[] = [];
     let reviews = 0;
+    const raised = new Set<string>();
     const handler = (req: Parameters<typeof cannedS2>[0]): unknown => {
       const g = (p: Record<string, unknown[]>) => fillGroup(req.schema, p);
       switch (req.task) {
@@ -186,21 +187,30 @@ test("buildFactLayer: unresolved copied_phrase deletes the element; too_concrete
           });
         case "s2.fact.world":
           return g({ contexts: [mNode({ id: "cx01", label: "受賞", kind: "award", claim_refs: ["c0027"] })] });
-        case "s2.fact.review":
+        case "s2.fact.review": {
           reviews++;
-          // round 2 (fresh) finds nothing: rl01's declined copied_phrase stays unresolved
-          return reviews === 1 ? { findings: [rf("rl01", "copied_phrase"), rf("ev02", "too_concrete"), rf("cs01", "unsupported")] } : { findings: [] };
-        case "s2.fact.revise":
+          // A14 reviews each group separately. Only raise findings for its own elements,
+          // once; a fresh round must leave declined copied_phrase unresolved.
+          const own = JSON.parse(req.prompt.match(/# レビュー対象（JSON）\n([^\n]+)/)![1]!);
+          const ids = new Set(Object.values(own).flatMap(v => (v as {id:string}[]).map(n => n.id)));
+          const findings = [rf("rl01", "copied_phrase"), rf("ev02", "too_concrete"), rf("cs01", "unsupported")]
+            .filter(f => ids.has(f.target_id) && !raised.has(f.target_id));
+          findings.forEach(f => raised.add(f.target_id));
+          return { findings };
+        }
+        case "s2.fact.revise": {
           assert.match(req.prompt, /これは第1回の対応です/);
+          const findings = [...req.prompt.matchAll(/- (r\d+f\d+) \[([^/]+)\/[^\]]+\] 対象 ([^:]+):/g)];
           return {
-            responses: [
-              { finding_id: "r1f01", action: "declined", reason: "固有名だけ" },
-              { finding_id: "r1f02", action: "declined", reason: "十分抽象的" },
-              { finding_id: "r1f03", action: "revised", reason: "因果は言えないので外した" },
-            ],
+            responses: findings.map(([, finding_id, type]) => ({
+              finding_id,
+              action: type === "unsupported" ? "revised" : "declined",
+              reason: type === "unsupported" ? "因果は言えないので外した" : "十分抽象的な固有名だけ",
+            })),
             updated: fillGroup((req.schema as { properties: { updated: object } }).properties.updated, {}),
-            removed_ids: ["cs01"],
+            removed_ids: findings.some(([, , , target]) => target === "cs01") ? ["cs01"] : [],
           };
+        }
         default:
           return cannedS2(req);
       }
@@ -210,7 +220,7 @@ test("buildFactLayer: unresolved copied_phrase deletes the element; too_concrete
     await selectModules(ctx);
     await buildPhases(ctx);
     const r = await buildFactLayer(ctx);
-    assert.equal(reviews, 2);
+    assert.equal(reviews, 6, "three review groups across two rounds");
     assert.equal(r.metrics.rounds, 2);
     assert.equal(r.metrics.deleted_copied_phrase, 1);
     assert.equal(r.metrics.advisory, 1);

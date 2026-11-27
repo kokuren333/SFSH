@@ -191,7 +191,8 @@ test("regen: write → compose → autocheck from saved research, previous outpu
     assert.equal(fs.readFileSync(path.join(b, "gen/public.json"), "utf8"), oldPublic);
     assert.equal(fs.readFileSync(path.join(b, "check/report.json"), "utf8"), oldReport);
     for (const item of ["gen/write_report.json", "gen/reviews/pages.json", "gen/gen_check.json", "work.json", "nkg/review_summary.json", "check/public.before.json"]) assert.ok(fs.existsSync(path.join(b, item)), item);
-    assert.deepEqual(read(b, "manifest.json").missing, []);
+    // A17: fiction has no BKG outputs; their absence is recorded without inventing files.
+    assert.deepEqual(read(b, "manifest.json").missing, ["gen/book_pages.json", "gen/book_write_report.json"]);
 
     // logs: one-line record + progress log; INDEX rebuilt
     const recLines = fs.readFileSync(rec.record_file, "utf8").trim().split("\n");
